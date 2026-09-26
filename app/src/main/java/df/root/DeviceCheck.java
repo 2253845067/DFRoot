@@ -99,34 +99,34 @@ final class DeviceCheck {
         String kmi = kmi();
         String missing = missingPaths();
         StringBuilder sb = new StringBuilder();
-        sb.append("* device: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
-          .append(" (").append(Build.DEVICE).append(")\n");
-        sb.append("* build : ").append(Build.DISPLAY).append('\n');
-        sb.append("* kernel: ").append(rel).append('\n');
-        sb.append("* kmi   : ").append(kmi.isEmpty() ? "UNKNOWN" : kmi).append('\n');
+        sb.append("* 机型    : ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
+          .append("（").append(Build.DEVICE).append("）\n");
+        sb.append("* 固件    : ").append(Build.DISPLAY).append('\n');
+        sb.append("* 内核    : ").append(rel).append('\n');
+        sb.append("* KMI     : ").append(kmi.isEmpty() ? "无法识别" : kmi).append('\n');
         sb.append(missing.isEmpty()
-                ? "* paths: all " + REQUIRED_PATHS.length + " required paths present\n"
-                : "* paths: MISSING -> " + missing + "\n");
+                ? "* 依赖路径: " + REQUIRED_PATHS.length + " 条全部就位\n"
+                : "* 依赖路径: 缺失 -> " + missing + "\n");
         if (exactProfile()) {
-            sb.append("* profile: exact match (").append(PROFILE_DISPLAY).append(")\n");
+            sb.append("* 适配档位: 精确匹配（").append(PROFILE_DISPLAY).append("）\n");
         } else {
-            sb.append("* profile: NOT the validated firmware (")
-              .append(PROFILE_MODEL).append(" / ").append(PROFILE_RELEASE).append(")\n");
-            sb.append("           continuing, but the bundled ksud is only validated for that pair\n");
+            sb.append("* 适配档位: 不是已验证的固件（")
+              .append(PROFILE_MODEL).append(" / ").append(PROFILE_RELEASE).append("）\n");
+            sb.append("            仍会继续，但内置 ksud 只针对上面这个组合验证过\n");
         }
         if (!PROFILE_KMI.equals(kmi)) {
-            sb.append("* warn  : kernel KMI is ").append(kmi.isEmpty() ? "unknown" : kmi)
-              .append(", bundled ksud embeds ").append(PROFILE_KMI).append('\n');
+            sb.append("* 注意    : 当前内核 KMI 是 ").append(kmi.isEmpty() ? "未知" : kmi)
+              .append("，内置 ksud 只带 ").append(PROFILE_KMI).append('\n');
         }
         return sb.toString();
     }
 
     /** Logs the report; returns true when it is safe to start patching. */
     static boolean preflight(String where) {
-        Log.i(TAG, "preflight (" + where + ")\n" + report());
+        Log.i(TAG, "自检（" + where + "）\n" + report());
         if (!criticalOk()) {
-            Log.e(TAG, "preflight failed in " + where + ": required paths missing ("
-                    + missingPaths() + ") or kernel KMI unparseable - refusing to patch anything");
+            Log.e(TAG, "自检未通过（" + where + "）：依赖路径缺失（"
+                    + missingPaths() + "）或内核 KMI 无法识别 —— 已放弃，不修改任何文件");
             return false;
         }
         return true;

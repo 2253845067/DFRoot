@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DFRoot</string>
+    <string name="toolbar_title">DFRoot</string>
+    <string name="switch_boot_start">开机自动获取 Root</string>
+    <string name="btn_run">一键获取 Root（DirtyFrag CVE-2026-43284）</string>
+</resources>

@@ -18,7 +18,7 @@
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:title="DFRoot" />
+            android:title="@string/toolbar_title" />
 
     </com.google.android.material.appbar.AppBarLayout>
 
@@ -51,7 +51,7 @@
         android:layout_height="wrap_content"
         android:layout_marginEnd="10dp"
         android:layout_marginBottom="4dp"
-        android:text="Start at Boot"
+        android:text="@string/switch_boot_start"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toTopOf="@+id/btnRun" />
 
@@ -62,8 +62,8 @@
         android:layout_marginStart="10dp"
         android:layout_marginEnd="10dp"
         android:layout_marginBottom="10dp"
-        android:text="Launch Root (DirtyFrag CVE-2026-43284)"
-        android:textSize="18sp"
+        android:text="@string/btn_run"
+        android:textSize="15sp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
