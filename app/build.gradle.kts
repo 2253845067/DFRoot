@@ -5,13 +5,14 @@ plugins {
 android {
     namespace = "df.root"
     compileSdk = 36
+    ndkVersion = "27.0.12077973"
 
     defaultConfig {
         applicationId = "df.root"
         minSdk = 32
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1-s938b"
 
         ndk {
             abiFilters += listOf("arm64-v8a")

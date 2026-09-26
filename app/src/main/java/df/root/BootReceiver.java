@@ -34,6 +34,11 @@ public class BootReceiver extends BroadcastReceiver implements IReporter {
 
     private void runExploit(Context context) {
         try {
+            if (!DeviceCheck.preflight("boot")) {
+                Log.e(TAG, "boot: preflight failed - aborting before patching anything");
+                return;
+            }
+
             IpSecManager ipsec = (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE);
 
             IpSecManager.UdpEncapsulationSocket encapSock = ipsec.openUdpEncapsulationSocket();

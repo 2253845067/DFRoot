@@ -75,6 +75,12 @@ public class MainActivity extends AppCompatActivity implements IReporter {
 
     private void runExploit() {
         try {
+            log(DeviceCheck.report());
+            if (!DeviceCheck.preflight("manual")) {
+                log("\npreflight FAILED: required paths missing - nothing was patched.");
+                return;
+            }
+
             IpSecManager ipsec = (IpSecManager) getSystemService(IPSEC_SERVICE);
 
             IpSecManager.UdpEncapsulationSocket encapSock = ipsec.openUdpEncapsulationSocket();
