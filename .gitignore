@@ -7,3 +7,6 @@ app/.cxx/
 local.properties
 *.iml
 .idea/
+
+# CI 产物
+.github/release-body.md

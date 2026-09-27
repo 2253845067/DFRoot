@@ -1,0 +1,131 @@
+name: Build & Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version and tag
+        id: v
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(grep -oE 'versionName[[:space:]]*=[[:space:]]*"[^"]+"' app/build.gradle.kts | head -1 | cut -d'"' -f2)"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="v${VERSION}"
+          fi
+          EXPECTED="v${VERSION}"
+          if [ "${TAG}" != "${EXPECTED}" ]; then
+            echo "::error::tag ${TAG} does not match versionName ${VERSION} (expected ${EXPECTED})"
+            exit 1
+          fi
+          PREV="$(git tag --list 'v*' --sort=-v:refname | grep -Fxv "${TAG}" | head -1 || true)"
+          {
+            echo "version=${VERSION}"
+            echo "tag=${TAG}"
+            echo "prev=${PREV}"
+          } >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}  tag=${TAG}  previous=${PREV}"
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK (platform 36, build-tools 36, NDK 27)
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0 ndk;27.0.12077973 cmake;3.22.1'
+          accept-android-sdk-licenses: true
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Decode signing keystore
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d .github/release-keystore.b64 > app/keystore.jks
+          test -s app/keystore.jks
+          echo "keystore decoded: $(stat -c%s app/keystore.jks) bytes"
+
+      - name: Build release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --no-daemon
+
+      - name: Prepare artifacts
+        shell: bash
+        env:
+          TAG: ${{ steps.v.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          APK="app/build/outputs/apk/release/dirtyfrag.apk"
+          test -f "${APK}"
+          cp "${APK}" "out/DFRoot-${TAG}.apk"
+          ( cd out && sha256sum "DFRoot-${TAG}.apk" > "DFRoot-${TAG}.apk.sha256" )
+          {
+            echo "## 构建产物"
+            echo
+            echo "- 文件：\`DFRoot-${TAG}.apk\`"
+            echo "- 大小：$(du -h "out/DFRoot-${TAG}.apk" | cut -f1)"
+            echo "- SHA256：\`$(cut -d' ' -f1 "out/DFRoot-${TAG}.apk.sha256")\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build release body
+        shell: bash
+        env:
+          TAG: ${{ steps.v.outputs.tag }}
+          PREV: ${{ steps.v.outputs.prev }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## 本版改动"
+            echo
+            if [ -n "${PREV}" ]; then
+              git log --format='- %s' "${PREV}..${TAG}"
+            else
+              echo "- 首个版本"
+            fi
+            echo
+            echo "---"
+            echo
+            cat RELEASE_NOTES.md
+          } > .github/release-body.md
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.v.outputs.tag }}
+          name: ${{ steps.v.outputs.tag }}
+          body_path: .github/release-body.md
+          files: |
+            out/*.apk
+            out/*.sha256
+          draft: false
+          make_latest: true
+
