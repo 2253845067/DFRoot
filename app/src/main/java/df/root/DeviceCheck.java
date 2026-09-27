@@ -131,4 +131,42 @@ final class DeviceCheck {
         }
         return true;
     }
+
+    /** Paths where an earlier root solution may have left a real `su` binary. */
+    static final String[] SU_PATHS = {
+        "/system/bin/su",
+        "/system/xbin/su",
+        "/sbin/su",
+        "/su/bin/su",
+    };
+
+    /** Non-null when a `su` binary from an earlier root session is still present. */
+    static String existingSu() {
+        for (String p : SU_PATHS) {
+            File f = new File(p);
+            if (f.exists() && f.length() > 0) return p;
+        }
+        return null;
+    }
+
+    /**
+     * Non-null when it is unsafe to run the exploit right now.
+     *
+     *  - the hook is already armed this boot (/dev/df); a second run would
+     *    re-patch pages that are already patched;
+     *  - another root solution is already active. ksud would then skip loading
+     *    its module, stay in the vendor_modprobe domain and fail to finish its
+     *    installation - observed on this device as /system/bin/su being
+     *    truncated to zero bytes, which breaks the existing root.
+     */
+    static String blockReason() {
+        if (new File("/dev/df").exists()) {
+            return "本轮已运行过（/dev/df 存在），需要硬重启手机后才能再次运行";
+        }
+        String su = existingSu();
+        if (su != null) {
+            return "检测到已有 root（" + su + " 存在），请先重启手机再运行本应用";
+        }
+        return null;
+    }
 }

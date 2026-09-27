@@ -4,4 +4,7 @@
     <string name="toolbar_title">DFRoot</string>
     <string name="switch_boot_start">开机自动获取 Root</string>
     <string name="btn_run">一键获取 Root（DirtyFrag CVE-2026-43284）</string>
+    <string name="btn_run_blocked">暂不可运行（见上方状态）</string>
+    <string name="hint_steps">使用步骤（必须在未 root 状态下运行）\n① 重启手机，确认 KernelSU Manager 显示「未安装」\n② 点下方按钮，等到输出「成功：ksud 已启动」\n③ 打开「开机自动获取 Root」，以后每次重启自动完成</string>
+    <string name="status_ready">状态：可以运行</string>
 </resources>

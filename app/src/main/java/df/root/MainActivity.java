@@ -3,6 +3,7 @@ package df.root;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.net.IpSecAlgorithm;
 import android.net.IpSecManager;
 import android.net.IpSecTransform;
@@ -55,7 +56,7 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         setContentView(binding.getRoot());
         setSupportActionBar(binding.toolbar);
 
-        if (new File("/dev/df").exists()) binding.btnRun.setEnabled(false);
+        refreshRunState();
 
         binding.btnRun.setOnClickListener(v -> {
             binding.btnRun.setEnabled(false);
@@ -73,8 +74,35 @@ public class MainActivity extends AppCompatActivity implements IReporter {
                 PackageManager.DONT_KILL_APP));
     }
 
+    /**
+     * 只有在确实安全时才允许运行：
+     *  - 本轮已经开过钩（/dev/df）；
+     *  - 检测到别的 root 方案已经在生效（/system/bin/su 等仍然存在）。
+     * 后者会让 ksud 跳过加载模块、停留在 vendor_modprobe 域，最终安装失败并把
+     * su 截成 0 字节 —— 实测过，所以直接拦住。
+     */
+    private void refreshRunState() {
+        String reason = DeviceCheck.blockReason();
+        if (reason == null) {
+            binding.statusText.setText(R.string.status_ready);
+            binding.statusText.setTextColor(Color.parseColor("#1B8A2E"));
+            binding.btnRun.setEnabled(true);
+            binding.btnRun.setText(R.string.btn_run);
+        } else {
+            binding.statusText.setText(reason);
+            binding.statusText.setTextColor(Color.parseColor("#C62828"));
+            binding.btnRun.setEnabled(false);
+            binding.btnRun.setText(R.string.btn_run_blocked);
+        }
+    }
+
     private void runExploit() {
         try {
+            String reason = DeviceCheck.blockReason();
+            if (reason != null) {
+                log("已中止：" + reason);
+                return;
+            }
             log(DeviceCheck.report());
             if (!DeviceCheck.preflight("手动运行")) {
                 log("\n自检未通过：依赖路径缺失 —— 没有修改任何文件，已中止。");
@@ -127,8 +155,8 @@ public class MainActivity extends AppCompatActivity implements IReporter {
             log("\n发生异常: " + e);
         } finally {
             mMain.post(() -> {
-                binding.btnRun.setEnabled(true);
                 binding.btnRun.setText(R.string.btn_run);
+                refreshRunState();
             });
         }
     }

@@ -107,6 +107,25 @@ adb install -r dirtyfrag.apk
 
 或者直接把 APK 拷进手机点击安装。
 
+### 应用内置的状态提示与保护
+
+打开 App 后，界面顶部固定显示**使用步骤**，下面是**当前状态**：
+
+| 状态 | 含义 |
+|---|---|
+| 🟢 **状态：可以运行** | 当前没有 root，可以点按钮 |
+| 🔴 **检测到已有 root（/system/bin/su 存在），请先重启手机再运行本应用** | 别的 root 方案已经在生效 |
+| 🔴 **本轮已运行过（/dev/df 存在），需要硬重启手机后才能再次运行** | 同一次开机内重复运行 |
+
+**后两种情况按钮会被自动禁用**，避免误操作。
+
+为什么必须有这道保护：如果已经有 root（KernelSU 模块已加载）再跑本工具，ksud 会跳过
+加载模块、停留在 `vendor_modprobe` 域，随后"完成安装"这一步会失败，并把
+`/system/bin/su` 截成 **0 字节** —— 结果是 root 模块还在，但 `su` 用不了了（实测踩过）。
+
+> 所以 DFRoot 和别的一键 root 工具（例如 Root-My-Galaxy）是**二选一**的关系：
+> 想用 DFRoot，就重启后直接跑它；这一轮已经用别的工具拿到 root 了，就等下次重启再试。
+
 ### 第二步：先手动跑一次（推荐）
 
 1. 打开 **DFRoot**；
@@ -197,13 +216,14 @@ App 自己的输出已经全部中文。
 
 ## 八、本 fork 相对上游改了什么
 
-基于上游 `fc81429`，共 3 个提交：
+基于上游 `fc81429`，共 4 个提交：
 
 | 提交 | 内容 |
 |---|---|
-| `Add SM-S938B (Galaxy S25 Ultra) port` | 新增 `DeviceCheck.java`（启动自检）；`MainActivity`/`BootReceiver` 接入自检；固定 `ndkVersion`；版本号 `1.1-s938b`；新增 `PORTING.md` |
+| `Add SM-S938B (Galaxy S25 Ultra) port` | 新增 `DeviceCheck.java`（启动自检）；`MainActivity`/`BootReceiver` 接入自检；固定 `ndkVersion`；新增 `PORTING.md` |
 | `Localize the UI and runtime output to Chinese` | 新增 `res/values/strings.xml`；布局与清单改用字符串资源；`DeviceCheck`/`MainActivity`/`BootReceiver` 日志中文化；`jni/exp.c` 的 50 条输出中文化（格式符与参数顺序未变） |
-| `Rewrite README in Chinese ...` | 本文件 |
+| `Rewrite README in Chinese ...` | 中文 README（本文件） |
+| `Guard against running while already rooted, show steps in the UI` | 新增"已 root / 本轮已挂钩"检测，命中时禁用按钮并给出中文提示；界面顶部固定显示三步使用流程；版本号 `1.1.1-s938b` |
 
 **没有改动**：漏洞利用逻辑、`dirtyfrag-lkm/`、`libc.S` / `libcxx.S` 的 shellcode、
 ksud 二进制。
