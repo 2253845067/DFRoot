@@ -39,7 +39,7 @@ jobs:
             echo "::error::tag ${TAG} does not match versionName ${VERSION} (expected ${EXPECTED})"
             exit 1
           fi
-          PREV="$(git tag --list 'v*' --sort=-v:refname | grep -Fxv "${TAG}" | head -1 || true)"
+          PREV="$(git tag --list 'v*-s938b' --sort=-v:refname | grep -Fxv "${TAG}" | head -1 || true)"
           {
             echo "version=${VERSION}"
             echo "tag=${TAG}"
