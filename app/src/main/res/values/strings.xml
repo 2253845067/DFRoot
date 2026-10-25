@@ -1,10 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">DFRoot</string>
+    <string name="app_subtitle">DirtyFrag · CVE-2026-43284</string>
     <string name="toolbar_title">DFRoot</string>
     <string name="switch_boot_start">开机自动获取 Root</string>
-    <string name="btn_run">一键获取 Root（DirtyFrag CVE-2026-43284）</string>
-    <string name="btn_run_blocked">暂不可运行（见上方状态）</string>
-    <string name="hint_steps">使用步骤（必须在未 root 状态下运行）\n① 重启手机，确认 KernelSU Manager 显示「未安装」\n② 点下方按钮，等到输出「成功：ksud 已启动」\n③ 打开「开机自动获取 Root」，以后每次重启自动完成</string>
-    <string name="status_ready">状态：可以运行</string>
+    <string name="switch_boot_desc">开机时自动执行</string>
+    <string name="btn_run">一键获取 Root</string>
+    <string name="btn_run_blocked">暂不可运行</string>
+    <string name="btn_run_running">正在运行…</string>
+    <string name="btn_clear">清空</string>
+    <string name="hint_steps">必须在未 root 状态下运行\n① 重启手机，确认 KernelSU Manager 显示「未安装」\n② 点下方按钮，等到输出「成功：ksud 已启动」\n③ 打开「开机自动获取 Root」，以后每次重启自动完成</string>
+    <string name="status_ready_title">可以运行</string>
+    <string name="status_ready_detail">KernelSU 32687 · UAPI 5 · 设备已就绪</string>
+    <string name="status_blocked_title">暂不可运行</string>
+    <string name="status_running_title">正在运行</string>
+    <string name="status_running_detail">正在执行 DirtyFrag，请勿退出应用</string>
+    <string name="badge_ready">就绪</string>
+    <string name="badge_blocked">已阻止</string>
+    <string name="badge_running">运行中</string>
+    <string name="section_steps">使用步骤</string>
+    <string name="section_device">设备信息</string>
+    <string name="section_log">运行日志</string>
+    <string name="info_model">机型</string>
+    <string name="info_firmware">固件</string>
+    <string name="info_kernel">内核</string>
+    <string name="info_kmi">KMI</string>
+    <string name="log_empty">等待运行…</string>
 </resources>

@@ -15,9 +15,10 @@ import java.io.File;
  * requirement is missing.
  *
  * Added for the SM-S938B (Galaxy S25 Ultra) port. The bundled ksud asset is the
- * Samsung KDP/RKP/DEFEX build for BP4A.251205.006.S938BXXS9CZE1; the profile
- * constants below are only used to warn, never to hard-block, so the same APK
- * still runs on a neighbouring S938B firmware.
+ * diabl0w/KernelSU Samsung build (samsung-v2.2, 32687, UAPI 5) and was validated
+ * on CP2A.260605.016.S938BXXSDDZJ1; the profile constants below are only used to
+ * warn, never to hard-block, so the same APK still runs on a neighbouring S938B
+ * firmware.
  */
 final class DeviceCheck {
 
@@ -26,9 +27,9 @@ final class DeviceCheck {
     /** Firmware this build's ksud asset was built and validated for. */
     static final String PROFILE_MODEL   = "SM-S938B";
     static final String PROFILE_DEVICE  = "pa3q";
-    static final String PROFILE_DISPLAY = "BP4A.251205.006.S938BXXS9CZE1";
+    static final String PROFILE_DISPLAY = "CP2A.260605.016.S938BXXSDDZJ1";
     static final String PROFILE_KMI     = "android15-6.6";
-    static final String PROFILE_RELEASE = "6.6.98-android15-8-pe17667d-abogkiS938BXXS9CZE1-4k";
+    static final String PROFILE_RELEASE = "6.6.127-android15-8-p87b1ce1-abogkiS938BXXSDDZJ1-4k";
 
     /** Every path the chain opens; a missing one is fatal. */
     static final String[] REQUIRED_PATHS = {

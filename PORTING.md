@@ -239,3 +239,147 @@ ksud late-load → KernelSU 模块加载 → 你原有的 7 个模块的 post-fs
 | 原有 7 个模块 post-fs-data / service | ✅ 全部执行 |
 | adb shell 直接 `su` | ⚠️ 默认不开（`allow_shell=false`），需要就加 `--allow-shell` |
 
+---
+
+## 9. 2026-10-25：Android 17 + KernelSU 32687 升级
+
+### 背景
+
+系统 OTA 到 `CP2A.260605.016.S938BXXSDDZJ1`（Android 17，内核
+`6.6.127-android15-8-p87b1ce1-abogkiS938BXXSDDZJ1-4k`，安全补丁 2026-10-05），
+DirtyFrag 仍然可用。KernelSU 管理器提示更新到官方 v3.3.1（32680），但：
+
+* 官方 v3.3.1 把 UAPI 从 2 升到 5，当前内核模块 32601 / UAPI 2 会一直报「需要更新内核」；
+* 官方 v3.3.0 / v3.3.1 的 ksud **没有** DFRoot 使用的
+  `--stage-from` / `--ro-partitions` / `--soft-reboot`，不能直接替换；
+* 最终选择 diabl0w/KernelSU 的 Samsung 构建 **samsung-v2.2（32687 / UAPI 5）**，
+  并从该源码重编 ksud，补回 DFRoot 需要的三个参数。
+
+### 对 ksud 源码的改动
+
+基于 `diabl0w/KernelSU` `samsung-v2.2`：
+
+1. `userspace/ksud/src/cli.rs`
+   * `LateLoad` 增加 `stage_from: Option<PathBuf>`、`ro_partitions: bool`、
+     `soft_reboot: bool`；
+   * 分发时把 `soft_reboot` / `stage_from` 传给 `late_load::run`，之后调用
+     `utils::set_partitions_ro()`，并在需要时
+     `utils::create_daemon(false)` + `soft_reboot::soft_reboot()`。
+2. `userspace/ksud/src/late_load.rs`
+   * `stage_from` 存在时，先 `utils::switch_mnt_ns(1)` 切到 init 的 mount
+     namespace，并从 init / zygote 克隆环境变量；否则模块的 mount 不会生效；
+   * `utils::install_from(stage_from.as_deref(), None, None)` 从
+     `/data/system/ksud` 安装，而不是在切换命名空间后读 `/proc/self/exe`；
+   * `soft_reboot` 为 true 时，安装完 ksud 就返回，跳过模块 late-load 脚本
+     （软重启会重新跑一遍）。
+3. `userspace/ksud/src/utils.rs`
+   * 新增 `install_from(source, ...)`，原 `install()` 继续走 `/proc/self/exe`；
+   * 新增 `set_partitions_ro()`：对 `/dev/block/by-name` 下的
+     boot / dtbo / init_boot / vendor_boot / super / optics / prism / vbmeta
+     （含 `_a` / `_b`）做 `BLKROSET`。
+4. `userspace/ksud/build.rs`
+   * 支持 `KSU_VERSION_CODE` / `KSU_VERSION_NAME` 覆盖；源码 tarball 没有 git
+     历史时也能固定为 32687 / samsung-v2.2。
+5. `userspace/ksud/bin/aarch64/`
+   * 放入 samsung-v2.2 release 的 8 个 `*_kernelsu.ko` 和 `ksuinit`，
+     由 rust-embed 打进 ksud。
+
+### 构建命令（macOS，NDK 27）
+
+```sh
+export PATH="$HOME/.cargo/bin:$PATH"
+export ANDROID_NDK_HOME=/path/to/android-sdk/ndk/27.0.12077973
+LLVM="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64"
+CLANG="$LLVM/bin/aarch64-linux-android26-clang"
+export CC_aarch64_linux_android="$CLANG"
+export CXX_aarch64_linux_android="$CLANG++"
+export AR_aarch64_linux_android="$LLVM/bin/llvm-ar"
+export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CLANG"
+export BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--sysroot=$LLVM/sysroot -I$LLVM/sysroot/usr/include/aarch64-linux-android"
+export KSU_LKM_BOOTSTRAP_CC="$LLVM/bin/clang"
+export KSU_VERSION_CODE=32687
+export KSU_VERSION_NAME=samsung-v2.2
+cd KernelSU
+cargo build --target aarch64-linux-android --release --manifest-path userspace/ksud/Cargo.toml
+# → target/aarch64-linux-android/release/ksud
+```
+
+把产物复制到 DFRoot 的 `app/src/main/assets/ksud`，再：
+
+```sh
+./gradlew :app:assembleRelease
+# → app/build/outputs/apk/release/dirtyfrag.apk
+```
+
+### 实测结果（2026-10-25）
+
+手动运行：
+
+```
+ksud::cli: command: LateLoad { magica: None, allow_shell: false, post_magica: false,
+  kmi: None, package_name: "me.weishu.kernelsu",
+  stage_from: Some("/data/system/ksud"), ro_partitions: true, soft_reboot: false }
+ksud::late_load: kernelsu.ko loaded successfully!
+ksud::late_load: [after load_module] selinux=u:r:ksu:s0
+ksud::cli: set 15 partition(s) read-only
+```
+
+开机自动：
+
+```
+dfroot: boot: exploit rc=0
+ksud::cli: command: LateLoad { ... stage_from: Some("/data/system/ksud"),
+  ro_partitions: true, soft_reboot: true }
+ksud::cli: Performing soft-reboot...
+ksud::soft_reboot: emulating soft_reboot!
+ksud::soft_reboot: waiting for boot complete
+dfroot: boot: already hooked, skipping
+```
+
+管理器：
+
+```
+LKM 工作中 [越狱模式]
+版本：32687-5
+自定义
+管理器版本：samsung-v2.2 (32687-5)
+内核版本：6.6.127-android15-8-p87b1ce1-abogkiS938BXXSDDZJ1-4k
+```
+
+> root 生效后 `getenforce` / `cat /proc/modules` 返回 Permission denied 是
+> `selinux_hide=1` 的正常行为，不代表模块没加载。
+
+### 回滚
+
+1. 重启（清掉当前 root）；
+2. `adb install -r -d DFRoot-1.1.1-s938b.apk`；
+3. 卸载 Samsung 管理器，装回官方 v3.3.0；
+4. 再重启，旧链（32601 / UAPI 2）恢复。
+
+回滚包在 `dist/rollback/`：`DFRoot-1.1.1-s938b.apk`、
+`KernelSU_v3.3.0_32601.apk`。
+
+---
+
+## 10. 2026-10-25：UI 按 Samsung 管理器风格重构（1.3.0）
+
+参考 `diabl0w/KernelSU` `samsung-v2.2` 的 Material 3 页面结构（Large top app bar、
+StatusCard、SegmentedListItem、底部导航），在 XML 侧重做了 DFRoot 主界面：
+
+* **主题**：`Theme.Material3.DayNight.NoActionBar` + `App` 中
+  `DynamicColors.applyToActivitiesIfAvailable()`，使用系统 Monet 取色；
+  edge-to-edge 由 `WindowCompat.setDecorFitsSystemWindows(false)` + insets 处理，
+  状态栏 / 导航栏图标随深浅色切换。
+* **状态卡**：`MaterialCardView` 28dp 圆角；就绪 / 运行中用
+  `secondaryContainer`，阻止用 `errorContainer`；标题 + Chip 徽章（就绪 / 已阻止 /
+  运行中），详细原因在标题下方通栏显示。
+* **设备信息卡**：机型 / 固件 / 内核 / KMI 四行，图标 + 主标签 + 次值，
+  行间用 `colorOutlineVariant` 分隔。
+* **运行日志**：深色 18dp 圆角控制台（160dp 高），空状态显示「等待运行…」，
+  运行或清空时切换占位；日志仍可选中、内部滚动。
+* **底部操作卡**：MaterialSwitch + 全宽 MaterialButton（28dp 圆角），
+  开关关闭 / 运行时按钮自动禁用。
+* 版本 `versionCode 5` / `versionName 1.3.0-s938b`；内核与 ksud 不变。
+
+浅色和深色实机截图见 `dist/screenshots/`。
+

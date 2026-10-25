@@ -1,3 +1,5 @@
 <resources>
-    <style name="Base.Theme.DirtyFrag" parent="Theme.Material3.DayNight.NoActionBar" />
+    <style name="Base.Theme.DirtyFrag" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">?attr/colorSurface</item>
+    </style>
 </resources>

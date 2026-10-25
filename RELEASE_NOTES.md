@@ -1,65 +1,79 @@
-基于上游 [diabl0w/DFRoot](https://github.com/diabl0w/DFRoot) 的 fork，专门适配
-**三星 Galaxy S25 Ultra（SM-S938B / pa3q）**，界面与运行输出已全部中文化。
+# DFRoot 1.3.0-s938b（SM-S938B / Galaxy S25 Ultra）
 
-**开机自动获取 root** —— 利用 DirtyFrag 漏洞（CVE-2026-43284），在 bootloader 锁定的
-三星机型上，每次开机自动重新加载 KernelSU，不用再手动跑一遍一键 root 工具。
+基于 [diabl0w/DFRoot](https://github.com/diabl0w/DFRoot) 的 fork，适配
+**三星 Galaxy S25 Ultra（SM-S938B / pa3q）**，界面与运行输出中文化。
 
-## 已验证环境
+利用 DirtyFrag（CVE-2026-43284），在 bootloader 锁定的三星机型上每次开机自动
+重新加载 KernelSU —— 不用再手动跑一遍一键 root 工具。
 
-| 项目 | 值 |
-| --- | --- |
-| 机型 | SM-S938B（Galaxy S25 Ultra，pa3q） |
-| 固件 | `BP4A.251205.006.S938BXXS9CZE1` |
-| 内核 | `6.6.98-android15-8-pe17667d-abogkiS938BXXS9CZE1-4k` |
-| KMI | android15-6.6 |
-| 安全补丁 | 2026-05-05 |
+## 本次更新（1.3.0，2026-10-25）
 
-## 实机验证结果
+- UI 按 Samsung KernelSU 管理器的 Material 3 风格重构：Large 标题、
+  状态 hero 卡（就绪 / 已阻止 / 运行中）、设备信息卡、深色日志控制台、
+  底部操作卡；
+- 动态取色（Monet）跟随系统，浅色 / 深色均适配；
+- 日志支持“等待运行…”占位和“清空”；进入页面显示机型 / 固件 / 内核 / KMI；
+- `versionCode 5` / `versionName 1.3.0-s938b`。内核部分不变：仍是
+  KernelSU 32687 / UAPI 5。
 
-- DirtyFrag 原语可用，四个补丁全部成功（crash_dump64 / libstagefrighthw.so / libc.so / libc++.so）
-- `dirtyfrag.ko` 加载成功，SELinux 转为 permissive
-- 内嵌 android15-6.6 KernelSU 模块加载成功，**无 panic**，域切换到 `u:r:ksu:s0`
-- 原有 7 个模块的 post-fs-data / service 脚本全部执行
-- KernelSU Manager 显示「**LKM 工作中 [越狱模式]**」
-- **开机自动恢复 root 走通**
+## 1.2.0 内核升级（2026-10-25）
 
-## 安装与使用
+| 项目 | 旧（1.1.1） | 新（1.2.0） |
+|---|---|---|
+| 固件 | BP4A.251205.006.S938BXXS9CZE1（Android 15） | CP2A.260605.016.S938BXXSDDZJ1（Android 17） |
+| 内核 | 6.6.98-android15-8 | 6.6.127-android15-8 |
+| 安全补丁 | 2026-05-05 | 2026-10-05 |
+| KernelSU | 32601 / UAPI 2 | 32687 / UAPI 5 |
+| 管理器 | 官方 v3.3.0 | diabl0w Samsung samsung-v2.2 |
+| DFRoot | 1.1.1（versionCode 3） | 1.2.0（versionCode 4） |
 
-**前置：先装 KernelSU Manager v3.3.0**
-<https://github.com/tiann/KernelSU/releases/tag/v3.3.0>
+- `assets/ksud` 换成基于 diabl0w/KernelSU `samsung-v2.2` 重编的 32687；
+- 把 DFRoot 需要的 `--stage-from` / `--ro-partitions` / `--soft-reboot` 重新补回；
+- `--stage-from` 会先切到 init 的 mount namespace，再从 `/data/system/ksud` 安装；
+- 自检的已验证固件更新为 DDZJ1 / 6.6.127；
+- 管理器换成 Samsung 版 samsung-v2.2（32687，UAPI 5）。
 
-```
-1. 安装 APK：adb install -r DFRoot-<版本>.apk
-2. 重启手机，确认 KernelSU Manager 显示「未安装」（必须是未 root 状态）
-3. 打开 DFRoot，确认顶部状态是「状态：可以运行」
-4. 点「一键获取 Root（DirtyFrag CVE-2026-43284）」
-5. 输出出现「成功：ksud 已启动」即成功
-6. 打开「开机自动获取 Root」开关，以后每次重启自动完成
-```
+## 实机验证（2026-10-25）
 
-界面顶部就写着这三步，不用记。
+- **手动运行**：四个补丁全部成功；ksud 32687 加载 `kernelsu.ko`（android15-6.6），
+  域切换到 `u:r:ksu:s0`；15 个分区设为只读；7 个模块的脚本全部执行。
+- 管理器显示「**LKM 工作中 [越狱模式]**」「版本：32687-5」「自定义」。
+- **开机自动**：打开开关后重启，BootReceiver 自动执行；ksud 带 `--soft-reboot`
+  完成框架软重启；第二次 `BOOT_COMPLETED` 显示 `already hooked, skipping`。
+- root 生效后 `selinux_hide` 会让 `getenforce` / `cat /proc/modules` 返回
+  Permission denied，这是正常的隐藏行为。
 
-详细说明见 [README](https://github.com/2253845067/DFRoot/blob/s938b/README.md)，
-适配过程与实测日志见 [PORTING.md](https://github.com/2253845067/DFRoot/blob/s938b/PORTING.md)。
+## 安装
 
-## 注意事项
+1. 如果装的是官方 KernelSU 管理器，先卸载；安装 Samsung 版：
+   <https://github.com/diabl0w/KernelSU/releases/tag/samsung-v2.2>
+2. 安装 DFRoot：
+   ```sh
+   adb install -r DFRoot-1.3.0-s938b.apk
+   ```
+3. 重启，确认管理器显示「未安装」（未 root 状态）。
+4. 打开 DFRoot，点「一键获取 Root」，等待输出「成功：ksud 已启动」。
+5. 打开「开机自动获取 Root」，以后每次重启自动完成。
 
-- 过程中手机会**短暂黑屏/闪一下** —— 那是 ksud 在重启系统框架（soft reboot），属正常现象
-- **不要在已经有 root 的状态下运行**（App 会自动拦住；如果绕过了，会导致 `su` 失效，重启即可恢复）
-- 如果内核的安全补丁已包含 DirtyFrag 修复（上游提交 `f4c50a4034e6`，2026-05-08），本工具会失败，这不是 bug
-- 所有改动只作用于**内存 page cache**，重启即全部还原；不改分区、不写 boot，不会变砖
-- 本 fork **刻意不给 ksud 传 `--allow-shell`**：普通 App 申请 root 正常（走管理器授权弹窗），
-  但 `adb shell` 里直接 `su` 不会提权。需要的话见 README 第六节
+> 从官方管理器换到 Samsung 版必须卸载重装（签名不同）；`/data/adb` 里的模块和
+> 授权记录不受影响，管理器里的设置会重置。
+
+## 注意
+
+- `adb shell` 里直接 `su` 仍然不会提权（`allow_shell=false`）。
+- 所有改动只作用于内存 page cache，不改分区、不写 boot；重启即还原。
+- 如果内核以后合入 DirtyFrag 修复，本工具会失败 —— 这不是 bug。
+- 回滚：装回 1.1.1 APK（`adb install -r -d`）并换回官方 v3.3.0 管理器，然后重启。
 
 ## 相对上游的改动
 
-- 新增**设备启动自检**：机型、固件、内核版本、KMI、6 条必需路径，不满足硬性条件直接中止
-- 新增**已 root 保护**：命中时禁用按钮并提示，避免把 `su` 搞坏
-- **界面与运行输出中文化**（含 `exp.c` 的 50 条进度/错误信息），界面内置三步使用流程
-- 固定 `ndkVersion 27.0.12077973`
-- 中文 README 与 PORTING.md 适配记录
+- 新增**设备启动自检**：机型、固件、内核版本、KMI、6 条必需路径；
+- 新增**已 root 保护**：命中时禁用按钮并提示；
+- **界面与运行输出中文化**（含 `exp.c` 的 50 条进度/错误信息）；
+- 固定 `ndkVersion 27.0.12077973`；
+- **1.2.0**：内置 KernelSU 升级到 32687 / UAPI 5（详见 [PORTING.md](PORTING.md)）。
 
-**未改动**：漏洞利用逻辑、`dirtyfrag-lkm/`、shellcode（`libc.S` / `libcxx.S`）、ksud 二进制。
+**未改动**：漏洞利用逻辑、`dirtyfrag-lkm/`、shellcode（`libc.S` / `libcxx.S`）。
 
 ---
 

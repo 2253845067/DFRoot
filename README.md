@@ -2,7 +2,8 @@
 
 > 这是 [diabl0w/DFRoot](https://github.com/diabl0w/DFRoot) 的 fork，专门适配
 > **三星 Galaxy S25 Ultra（SM-S938B / pa3q）**，界面与运行输出已全部中文化。
-> 漏洞利用原理与绝大部分代码来自上游及下列作者，本 fork 只做了机型适配、启动自检和中文化。
+> 漏洞利用原理与绝大部分代码来自上游及下列作者，本 fork 只做了机型适配、启动自检、
+> 中文化、1.2.0 的 KernelSU 32687 升级，以及 1.3.0 的 UI 重构。
 
 一句话：**开机自动获取 root**。利用 DirtyFrag 漏洞（CVE-2026-43284），
 在 bootloader 锁定的三星机型上，每次开机自动把 KernelSU 重新加载起来 ——
@@ -12,9 +13,10 @@
 
 ## 一、支持机型
 
-| 机型 | 固件 | 内核 | 状态 |
-|---|---|---|---|
-| SM-S938B（Galaxy S25 Ultra，pa3q） | `BP4A.251205.006.S938BXXS9CZE1` | `6.6.98-android15-8-pe17667d-abogkiS938BXXS9CZE1-4k` | ✅ **实机验证通过** |
+| 机型 | 固件 | 内核 | KernelSU | 状态 |
+|---|---|---|---|---|
+| SM-S938B（Galaxy S25 Ultra，pa3q） | `CP2A.260605.016.S938BXXSDDZJ1`（Android 17） | `6.6.127-android15-8-p87b1ce1-abogkiS938BXXSDDZJ1-4k` | 32687 / UAPI 5 | ✅ **实机验证通过（2026-10-25）** |
+| SM-S938B（历史记录） | `BP4A.251205.006.S938BXXS9CZE1`（Android 15） | `6.6.98-android15-8-pe17667d-abogkiS938BXXS9CZE1-4k` | 32601 / UAPI 2 | ✅ 实机验证通过（2026-09-26，1.1.1） |
 
 上游原本支持的其它 KMI（android12-5.10 ~ android17-6.18）本 fork 没有改动，
 理论上仍可用，但未经本 fork 验证。
@@ -62,6 +64,24 @@ KernelSU Manager 显示 **「LKM 工作中 [越狱模式]」**，原有模块全
 **开机自动获取 root 也已验证**：打开开关后重启，BootReceiver 会在
 `LOCKED_BOOT_COMPLETED` 自动接管，全流程无需人工干预。
 
+### 2026-10-25 更新：Android 17 / KernelSU 32687
+
+系统升级到 `CP2A.260605.016.S938BXXSDDZJ1`（Android 17，内核 6.6.127，安全补丁
+2026-10-05）后，DirtyFrag 仍然可用。本次把内置 KernelSU 从 32601（UAPI 2）升级到
+**32687（UAPI 5）**，管理器换成 diabl0w 的 Samsung 版 samsung-v2.2：
+
+* **手动运行**：四个补丁成功 → `kernelsu.ko` (android15-6.6) 加载 →
+  `u:r:ksu:s0` → 15 个分区只读 → 7 个模块脚本执行；
+* **开机自动**：BootReceiver 在 `LOCKED_BOOT_COMPLETED` 执行，ksud 带
+  `--soft-reboot` 完成框架软重启，第二次 `BOOT_COMPLETED` 显示
+  `already hooked, skipping`；
+* 管理器显示「LKM 工作中 [越狱模式] / 版本 32687-5 / 自定义」。
+* **1.3.0**：界面按 Samsung KernelSU 管理器的 Material 3 风格重构 —— 大标题、
+  状态 hero 卡、设备信息卡、深色日志控制台、底部操作卡；动态取色，支持深色模式。
+
+> 管理器从官方 v3.3.x 换到 Samsung 版需要卸载重装（签名不同）；`/data/adb` 里的
+> 模块和授权记录不受影响，管理器里的设置会重置。
+
 ---
 
 ## 三、编译
@@ -93,11 +113,13 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 
 ### 前置条件
 
-1. **装好 KernelSU Manager**（`me.weishu.kernelsu`，v3.3.0）：
-   <https://github.com/tiann/KernelSU/releases/tag/v3.3.0>
+1. **装好 Samsung 版 KernelSU Manager**（`me.weishu.kernelsu`，samsung-v2.2 / 32687）：
+   <https://github.com/diabl0w/KernelSU/releases/tag/samsung-v2.2>
+   它和官方 v3.3.x 签名不同，装之前先卸载官方管理器；`/data/adb` 里的模块和授权不会丢。
 2. **确认内核仍然存在 DirtyFrag 漏洞**（CVE-2026-43284）。
-   上游修复提交是 `f4c50a4034e6`（2026-05-08）。如果手机的安全补丁级别已经
-   包含该修复，本工具会失败 —— 这不是 bug，是漏洞没了。
+   上游修复提交是 `f4c50a4034e6`（2026-05-08）。补丁日期只能作参考：本机在
+   2026-10-05 补丁级别下实测仍可用，说明三星这条分支没有合入该修复；如果哪天
+   日志里补丁 #1/#2 开始失败，基本就是漏洞被合入了。
 
 ### 第一步：安装
 
@@ -196,8 +218,8 @@ argv 加上 `--allow-shell`，重新编译即可 —— 但请自行评估风险
 预期存在的文件，把报告贴出来即可判断。
 
 **Q：走到一半失败，提示补丁 #1 / #2 失败？**
-大概率是内核里的 DirtyFrag 漏洞已经被修复了。检查「Android 安全补丁级别」，
-如果晚于 2026-05 月，基本可以确认。
+大概率是内核里的 DirtyFrag 漏洞已经被修复了。安全补丁日期只是参考
+（本机 2026-10-05 仍可用），最终看日志里补丁 #1/#2 是否成功。
 
 **Q：root 拿到了，但过一会儿又没了？**
 KernelSU 模块是**每次开机重新加载**的（bootloader 锁定，无法改 boot 分区）。
@@ -209,24 +231,27 @@ libstagefrighthw.so），重启即全部还原；不改分区、不写 boot。
 上游还额外加了把块设备设为只读的保护。
 
 **Q：日志里那些英文（KernelSU / ksud 打的）能中文化吗？**
-那是 KernelSU 内核模块和 ksud 自己的输出，属于上游二进制，本 fork 没有改动它们。
-App 自己的输出已经全部中文。
+那是 KernelSU 内核模块和 ksud 自己的输出；ksud 在 1.2.0 中重编过（补回
+DFRoot 需要的参数），但日志文本没有改。App 自己的输出已经全部中文。
 
 ---
 
 ## 八、本 fork 相对上游改了什么
 
-基于上游 `fc81429`，共 4 个提交：
+基于上游 `fc81429`，4 个适配提交，加上 1.2.0 的 KernelSU 升级：
 
-| 提交 | 内容 |
+| 提交/版本 | 内容 |
 |---|---|
 | `Add SM-S938B (Galaxy S25 Ultra) port` | 新增 `DeviceCheck.java`（启动自检）；`MainActivity`/`BootReceiver` 接入自检；固定 `ndkVersion`；新增 `PORTING.md` |
 | `Localize the UI and runtime output to Chinese` | 新增 `res/values/strings.xml`；布局与清单改用字符串资源；`DeviceCheck`/`MainActivity`/`BootReceiver` 日志中文化；`jni/exp.c` 的 50 条输出中文化（格式符与参数顺序未变） |
 | `Rewrite README in Chinese ...` | 中文 README（本文件） |
 | `Guard against running while already rooted, show steps in the UI` | 新增"已 root / 本轮已挂钩"检测，命中时禁用按钮并给出中文提示；界面顶部固定显示三步使用流程；版本号 `1.1.1-s938b` |
+| **1.2.0-s938b（2026-10-25）** | 内置 ksud 从 32601 换成基于 diabl0w/KernelSU `samsung-v2.2` 重编的 32687（UAPI 5），补回 `--stage-from` / `--ro-partitions` / `--soft-reboot`；自检固件更新为 DDZJ1 / 6.6.127；管理器改为 Samsung samsung-v2.2 |
+| **1.3.0-s938b（2026-10-25）** | UI 按 Samsung KernelSU 管理器的 Material 3 风格重构（动态取色 / 状态卡 / 设备信息卡 / 日志控制台 / 底部操作卡）；内核不变（32687 / UAPI 5） |
 
-**没有改动**：漏洞利用逻辑、`dirtyfrag-lkm/`、`libc.S` / `libcxx.S` 的 shellcode、
-ksud 二进制。
+**没有改动**：漏洞利用逻辑、`dirtyfrag-lkm/`、`libc.S` / `libcxx.S` 的 shellcode。
+ksud 在 1.2.0 中按 `samsung-v2.2` 重编（只补回 DFRoot 需要的参数和安装路径），详见
+[PORTING.md](PORTING.md)。
 
 详细适配记录见 [PORTING.md](PORTING.md)。
 

@@ -10,3 +10,6 @@ local.properties
 
 # CI 产物
 .github/release-body.md
+
+# 本地构建产物 / 回滚包
+dist/
