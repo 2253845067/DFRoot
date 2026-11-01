@@ -220,11 +220,9 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         binding.statusCard.setCardBackgroundColor(container);
         binding.statusText.setTextColor(onContainer);
         binding.statusDetail.setTextColor(onContainer);
-        binding.statusDetail.setAlpha(0.75f);
         binding.statusIcon.setImageResource(iconRes);
         binding.statusIcon.setImageTintList(ColorStateList.valueOf(onContainer));
         binding.statusBadge.setTextColor(onContainer);
-        binding.statusBadge.setAlpha(0.75f);
     }
 
     private void runExploit() {
