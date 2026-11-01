@@ -9,8 +9,10 @@
     <color name="dashboard_secondary">#FF666666</color>
     <color name="dashboard_accent">#FF2F6F73</color>
     <color name="dashboard_on_accent">#FFFFFFFF</color>
-    <color name="dashboard_status">#FFE6F3F4</color>
-    <color name="dashboard_status_text">#FF2F6F73</color>
+    <color name="dashboard_status">#FFE7F6EC</color>
+    <color name="dashboard_status_text">#FF1B7A3D</color>
+    <color name="dashboard_running">#FFFEF3D7</color>
+    <color name="dashboard_running_text">#FF8A5A00</color>
     <color name="dashboard_error">#FFFDECEC</color>
     <color name="dashboard_error_text">#FFB3261E</color>
 </resources>

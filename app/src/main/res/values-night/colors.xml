@@ -7,8 +7,10 @@
     <color name="dashboard_secondary">#FFB3BEBE</color>
     <color name="dashboard_accent">#FF91CFD2</color>
     <color name="dashboard_on_accent">#FF10262A</color>
-    <color name="dashboard_status">#FF203D3F</color>
-    <color name="dashboard_status_text">#FFA8DADC</color>
+    <color name="dashboard_status">#FF1B3324</color>
+    <color name="dashboard_status_text">#FF8ED9A8</color>
+    <color name="dashboard_running">#FF352C18</color>
+    <color name="dashboard_running_text">#FFF2C46B</color>
     <color name="dashboard_error">#FF4A2929</color>
     <color name="dashboard_error_text">#FFFFB4AB</color>
 </resources>

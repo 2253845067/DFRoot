@@ -208,7 +208,7 @@ public class MainActivity extends AppCompatActivity implements IReporter {
     private void setRunningState() {
         binding.statusText.setText(R.string.status_running_title);
         binding.statusDetail.setText(R.string.status_running_detail);
-        applyStatus(R.color.dashboard_status, R.color.dashboard_status_text, R.drawable.ic_autorenew);
+        applyStatus(R.color.dashboard_running, R.color.dashboard_running_text, R.drawable.ic_autorenew);
         binding.btnRun.setEnabled(false);
         binding.btnRun.setContentDescription(getString(R.string.btn_run_running));
     }
