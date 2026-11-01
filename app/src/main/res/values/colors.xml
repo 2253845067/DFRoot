@@ -2,4 +2,14 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="dashboard_background">#FFF2F4F4</color>
+    <color name="dashboard_card">#FFFFFFFF</color>
+    <color name="dashboard_border">#FFE0E0E0</color>
+    <color name="dashboard_text">#FF303030</color>
+    <color name="dashboard_secondary">#FF666666</color>
+    <color name="dashboard_accent">#FF2F6F73</color>
+    <color name="dashboard_status">#FFE6F3F4</color>
+    <color name="dashboard_status_text">#FF2F6F73</color>
+    <color name="dashboard_error">#FFFDECEC</color>
+    <color name="dashboard_error_text">#FFB3261E</color>
 </resources>

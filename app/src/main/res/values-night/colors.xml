@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="dashboard_background">#FF171B1B</color>
+    <color name="dashboard_card">#FF232828</color>
+    <color name="dashboard_border">#FF3C4444</color>
+    <color name="dashboard_text">#FFE8ECEC</color>
+    <color name="dashboard_secondary">#FFB3BEBE</color>
+    <color name="dashboard_accent">#FF91CFD2</color>
+    <color name="dashboard_status">#FF203D3F</color>
+    <color name="dashboard_status_text">#FFA8DADC</color>
+    <color name="dashboard_error">#FF4A2929</color>
+    <color name="dashboard_error_text">#FFFFB4AB</color>
+</resources>

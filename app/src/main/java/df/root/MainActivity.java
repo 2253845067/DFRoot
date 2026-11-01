@@ -1,6 +1,8 @@
 package df.root;
 
 import android.content.ComponentName;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
@@ -15,19 +17,16 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.view.View;
-import android.view.ViewGroup;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
-
-import com.google.android.material.color.MaterialColors;
 
 import df.root.databinding.ActivityMainBinding;
 
@@ -75,12 +74,23 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         applySystemBarAppearance();
         populateDeviceInfo();
         refreshRunState();
+        showPage(savedInstanceState != null && savedInstanceState.getBoolean("settingsPage"));
+
+        binding.navHome.setOnClickListener(v -> showPage(false));
+        binding.navSettings.setOnClickListener(v -> showPage(true));
+        binding.btnCopyDevice.setOnClickListener(v -> {
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.section_device), deviceInfo()));
+            Toast.makeText(this, R.string.device_info_copied, Toast.LENGTH_SHORT).show();
+        });
 
         binding.btnRun.setOnClickListener(v -> {
             binding.btnRun.setEnabled(false);
             binding.outputView.setText("");
             binding.outputPlaceholder.setVisibility(View.VISIBLE);
             setRunningState();
+            binding.contentScroll.post(() -> binding.contentScroll.smoothScrollTo(
+                    0, binding.homePage.getTop() + binding.logCard.getTop()));
             mExec.execute(this::runExploit);
         });
 
@@ -99,11 +109,33 @@ public class MainActivity extends AppCompatActivity implements IReporter {
                 PackageManager.DONT_KILL_APP));
     }
 
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        outState.putBoolean("settingsPage", binding.settingsPage.getVisibility() == View.VISIBLE);
+        super.onSaveInstanceState(outState);
+    }
+
+    private void showPage(boolean settings) {
+        binding.homePage.setVisibility(settings ? View.GONE : View.VISIBLE);
+        binding.settingsPage.setVisibility(settings ? View.VISIBLE : View.GONE);
+        binding.btnRun.setVisibility(settings ? View.GONE : View.VISIBLE);
+        binding.pageTitle.setText(settings ? R.string.nav_settings : R.string.dashboard_title);
+        int active = ContextCompat.getColor(this, R.color.dashboard_accent);
+        int inactive = ContextCompat.getColor(this, R.color.dashboard_secondary);
+        binding.navHome.setTextColor(settings ? inactive : active);
+        binding.navHome.setIconTint(ColorStateList.valueOf(settings ? inactive : active));
+        binding.navSettings.setTextColor(settings ? active : inactive);
+        binding.navSettings.setIconTint(ColorStateList.valueOf(settings ? active : inactive));
+        binding.navHome.setSelected(!settings);
+        binding.navSettings.setSelected(settings);
+        binding.contentScroll.scrollTo(0, 0);
+    }
+
     private void applyInsets() {
         ViewCompat.setOnApplyWindowInsetsListener(binding.getRoot(), (v, insets) -> {
             Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            binding.content.setPadding(dp(20), dp(20) + bars.top, dp(20), dp(24));
-            binding.bottomBarWrapper.setPadding(dp(16), dp(8), dp(16), dp(16) + bars.bottom);
+            binding.content.setPadding(dp(16), bars.top, dp(16), dp(24));
+            binding.bottomBarWrapper.setPadding(0, 0, 0, bars.bottom);
             return insets;
         });
     }
@@ -120,29 +152,33 @@ public class MainActivity extends AppCompatActivity implements IReporter {
     }
 
     private void populateDeviceInfo() {
-        addInfoRow(R.drawable.ic_phone, getString(R.string.info_model),
-                Build.MANUFACTURER + " " + Build.MODEL);
-        addInfoRow(R.drawable.ic_firmware, getString(R.string.info_firmware), Build.DISPLAY);
-        addInfoRow(R.drawable.ic_memory, getString(R.string.info_kernel), DeviceCheck.release());
-        addInfoRow(R.drawable.ic_build, getString(R.string.info_kmi), DeviceCheck.kmi());
+        addInfoRow(R.string.info_model, Build.MANUFACTURER + " " + Build.MODEL);
+        addInfoRow(R.string.info_system, Build.VERSION.RELEASE + " · API " + Build.VERSION.SDK_INT);
+        addInfoRow(R.string.info_firmware, Build.DISPLAY);
+        addInfoRow(R.string.info_kernel, DeviceCheck.release());
+        addInfoRow(R.string.info_kmi, DeviceCheck.kmi());
+        addInfoRow(R.string.info_arch, Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "—");
+        addInfoRow(R.string.info_fingerprint, Build.FINGERPRINT);
     }
 
-    private void addInfoRow(int iconRes, String label, String value) {
-        if (binding.deviceInfoContainer.getChildCount() > 0) {
-            View divider = new View(this);
-            divider.setLayoutParams(new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, dp(1)));
-            divider.setBackgroundColor(MaterialColors.getColor(binding.deviceInfoContainer,
-                    com.google.android.material.R.attr.colorOutlineVariant));
-            binding.deviceInfoContainer.addView(divider);
-        }
-
+    private void addInfoRow(int label, String value) {
         View row = getLayoutInflater().inflate(R.layout.item_info_row,
                 binding.deviceInfoContainer, false);
-        ((ImageView) row.findViewById(R.id.infoIcon)).setImageResource(iconRes);
         ((TextView) row.findViewById(R.id.infoLabel)).setText(label);
-        ((TextView) row.findViewById(R.id.infoValue)).setText(value);
+        ((TextView) row.findViewById(R.id.infoValue)).setText(value == null || value.isEmpty() ? "—" : value);
         binding.deviceInfoContainer.addView(row);
+    }
+
+    private String deviceInfo() {
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < binding.deviceInfoContainer.getChildCount(); i++) {
+            View row = binding.deviceInfoContainer.getChildAt(i);
+            if (i > 0) result.append('\n');
+            result.append(((TextView) row.findViewById(R.id.infoLabel)).getText())
+                    .append(": ")
+                    .append(((TextView) row.findViewById(R.id.infoValue)).getText());
+        }
+        return result.toString();
     }
 
     /**
@@ -157,47 +193,29 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         if (reason == null) {
             binding.statusText.setText(R.string.status_ready_title);
             binding.statusDetail.setText(R.string.status_ready_detail);
-            binding.statusBadge.setText(R.string.badge_ready);
-            applyStatus(com.google.android.material.R.attr.colorSecondaryContainer,
-                    com.google.android.material.R.attr.colorOnSecondaryContainer,
-                    androidx.appcompat.R.attr.colorPrimary,
-                    com.google.android.material.R.attr.colorOnPrimary,
-                    R.drawable.ic_shield_check);
+            applyStatus(R.color.dashboard_status, R.color.dashboard_status_text, R.drawable.ic_shield_check);
             binding.btnRun.setEnabled(true);
-            binding.btnRun.setText(R.string.btn_run);
+            binding.btnRun.setContentDescription(getString(R.string.btn_run));
         } else {
             binding.statusText.setText(R.string.status_blocked_title);
             binding.statusDetail.setText(reason);
-            binding.statusBadge.setText(R.string.badge_blocked);
-            applyStatus(com.google.android.material.R.attr.colorErrorContainer,
-                    com.google.android.material.R.attr.colorOnErrorContainer,
-                    androidx.appcompat.R.attr.colorError,
-                    com.google.android.material.R.attr.colorOnError,
-                    R.drawable.ic_error);
+            applyStatus(R.color.dashboard_error, R.color.dashboard_error_text, R.drawable.ic_error);
             binding.btnRun.setEnabled(false);
-            binding.btnRun.setText(R.string.btn_run_blocked);
+            binding.btnRun.setContentDescription(getString(R.string.btn_run_blocked));
         }
     }
 
     private void setRunningState() {
         binding.statusText.setText(R.string.status_running_title);
         binding.statusDetail.setText(R.string.status_running_detail);
-        binding.statusBadge.setText(R.string.badge_running);
-        applyStatus(com.google.android.material.R.attr.colorSecondaryContainer,
-                com.google.android.material.R.attr.colorOnSecondaryContainer,
-                androidx.appcompat.R.attr.colorPrimary,
-                com.google.android.material.R.attr.colorOnPrimary,
-                R.drawable.ic_autorenew);
+        applyStatus(R.color.dashboard_status, R.color.dashboard_status_text, R.drawable.ic_autorenew);
         binding.btnRun.setEnabled(false);
-        binding.btnRun.setText(R.string.btn_run_running);
+        binding.btnRun.setContentDescription(getString(R.string.btn_run_running));
     }
 
-    private void applyStatus(int containerAttr, int onContainerAttr,
-                             int badgeBgAttr, int badgeFgAttr, int iconRes) {
-        int container = MaterialColors.getColor(binding.statusCard, containerAttr);
-        int onContainer = MaterialColors.getColor(binding.statusCard, onContainerAttr);
-        int badgeBg = MaterialColors.getColor(binding.statusCard, badgeBgAttr);
-        int badgeFg = MaterialColors.getColor(binding.statusCard, badgeFgAttr);
+    private void applyStatus(int containerColor, int textColor, int iconRes) {
+        int container = ContextCompat.getColor(this, containerColor);
+        int onContainer = ContextCompat.getColor(this, textColor);
 
         binding.statusCard.setCardBackgroundColor(container);
         binding.statusText.setTextColor(onContainer);
@@ -205,8 +223,8 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         binding.statusDetail.setAlpha(0.75f);
         binding.statusIcon.setImageResource(iconRes);
         binding.statusIcon.setImageTintList(ColorStateList.valueOf(onContainer));
-        binding.statusBadge.setChipBackgroundColor(ColorStateList.valueOf(badgeBg));
-        binding.statusBadge.setTextColor(badgeFg);
+        binding.statusBadge.setTextColor(onContainer);
+        binding.statusBadge.setAlpha(0.75f);
     }
 
     private void runExploit() {
