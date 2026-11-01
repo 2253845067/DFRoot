@@ -8,6 +8,7 @@
     <color name="dashboard_text">#FF303030</color>
     <color name="dashboard_secondary">#FF666666</color>
     <color name="dashboard_accent">#FF2F6F73</color>
+    <color name="dashboard_on_accent">#FFFFFFFF</color>
     <color name="dashboard_status">#FFE6F3F4</color>
     <color name="dashboard_status_text">#FF2F6F73</color>
     <color name="dashboard_error">#FFFDECEC</color>

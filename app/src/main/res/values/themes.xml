@@ -1,6 +1,18 @@
 <resources>
     <style name="Base.Theme.DirtyFrag" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="android:windowBackground">?attr/colorSurface</item>
+        <item name="android:windowBackground">@color/dashboard_background</item>
+        <item name="colorPrimary">@color/dashboard_accent</item>
+        <item name="colorOnPrimary">@color/dashboard_on_accent</item>
+        <item name="colorPrimaryContainer">@color/dashboard_status</item>
+        <item name="colorOnPrimaryContainer">@color/dashboard_status_text</item>
+        <item name="colorSecondary">@color/dashboard_accent</item>
+        <item name="colorOnSecondary">@color/dashboard_on_accent</item>
+        <item name="colorSecondaryContainer">@color/dashboard_status</item>
+        <item name="colorOnSecondaryContainer">@color/dashboard_status_text</item>
+        <item name="colorSurface">@color/dashboard_background</item>
+        <item name="colorOnSurface">@color/dashboard_text</item>
+        <item name="colorOnSurfaceVariant">@color/dashboard_secondary</item>
+        <item name="colorOutline">@color/dashboard_border</item>
     </style>
     <style name="Theme.DirtyFrag" parent="Base.Theme.DirtyFrag" />
 </resources>
