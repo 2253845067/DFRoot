@@ -77,9 +77,9 @@ KernelSU Manager 显示 **「LKM 工作中 [越狱模式]」**，原有模块全
   `already hooked, skipping`；
 * 管理器显示「LKM 工作中 [越狱模式] / 版本 32687-5 / 自定义」。
 * **1.3.0**：界面按 Samsung KernelSU 管理器的 Material 3 风格重构 —— 大标题、
-  状态 hero 卡、设备信息卡、深色日志控制台、底部操作卡；动态取色，支持深色模式。
-* 当前界面参考 [DirtyFragX](https://github.com/dugongzi/DirtyFragX) 的卡片式布局：
-  首页展示状态、设备信息及日志，设置页提供开机开关和使用步骤，支持深色模式。
+  状态 hero 卡、设备信息卡、深色日志控制台、底部操作卡。
+* 当前界面参考 [DirtyFragX](https://github.com/dugongzi/DirtyFragX) 的卡片式布局与
+  青绿配色：首页展示状态、设备信息及日志，设置页提供开机开关和使用步骤，支持深色模式。
 
 > 管理器从官方 v3.3.x 换到 Samsung 版需要卸载重装（签名不同）；`/data/adb` 里的
 > 模块和授权记录不受影响，管理器里的设置会重置。
@@ -250,6 +250,7 @@ DFRoot 需要的参数），但日志文本没有改。App 自己的输出已经
 | `Guard against running while already rooted, show steps in the UI` | 新增"已 root / 本轮已挂钩"检测，命中时禁用按钮并给出中文提示；界面顶部固定显示三步使用流程；版本号 `1.1.1-s938b` |
 | **1.2.0-s938b（2026-10-25）** | 内置 ksud 从 32601 换成基于 diabl0w/KernelSU `samsung-v2.2` 重编的 32687（UAPI 5），补回 `--stage-from` / `--ro-partitions` / `--soft-reboot`；自检固件更新为 DDZJ1 / 6.6.127；管理器改为 Samsung samsung-v2.2 |
 | **1.3.0-s938b（2026-10-25）** | UI 按 Samsung KernelSU 管理器的 Material 3 风格重构（动态取色 / 状态卡 / 设备信息卡 / 日志控制台 / 底部操作卡）；内核不变（32687 / UAPI 5） |
+| **界面调整** | 参考 [DirtyFragX](https://github.com/dugongzi/DirtyFragX) 重做卡片式仪表盘：青绿浅底、状态卡、设备信息卡、运行日志、底部「首页 / 设置」导航；内核逻辑不变 |
 
 **没有改动**：漏洞利用逻辑、`dirtyfrag-lkm/`、`libc.S` / `libcxx.S` 的 shellcode。
 ksud 在 1.2.0 中按 `samsung-v2.2` 重编（只补回 DFRoot 需要的参数和安装路径），详见

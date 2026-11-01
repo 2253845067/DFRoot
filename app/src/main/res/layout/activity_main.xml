@@ -49,7 +49,7 @@
                     android:contentDescription="@string/btn_run"
                     android:padding="12dp"
                     android:src="@drawable/ic_play"
-                    android:tint="@color/dashboard_text" />
+                    android:tint="@color/run_button_tint" />
             </LinearLayout>
 
             <LinearLayout
