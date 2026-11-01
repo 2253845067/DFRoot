@@ -193,7 +193,7 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         if (reason == null) {
             binding.statusText.setText(R.string.status_ready_title);
             binding.statusDetail.setText(R.string.status_ready_detail);
-            applyStatus(R.color.dashboard_status, R.color.dashboard_status_text, R.drawable.ic_shield_check);
+            applyStatus(R.color.dashboard_status, R.color.dashboard_status_text, R.drawable.ic_check);
             binding.btnRun.setEnabled(true);
             binding.btnRun.setContentDescription(getString(R.string.btn_run));
         } else {
