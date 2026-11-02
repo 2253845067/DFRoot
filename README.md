@@ -11,6 +11,17 @@
 
 ---
 
+## UI port note (branch `ui/dirtyfragx-port`)
+
+本分支把 [dugongzi/DirtyFragX](https://github.com/dugongzi/DirtyFragX) 的 UI 壳（卡片首页、设置页、运行日志页、主题/语言/更新检查）移植到 DFRoot **s938b**。
+
+- **UI**：来自 DirtyFragX（GPL-3.0），署名 dugongzi / mitschud/DirtyFrag / diabl0w/DFRoot
+- **后端**：仍是本仓库 s938b 已验证链路 —— `DeviceCheck` + IpSec AES-CBC/HMAC-SHA256 + `assets/ksud` + JNI `libexp` / `nativeRunAll`，**不**使用 DirtyFragX 的 `libdfroot.so` 外置 exec / 外部 `libksud.so` 路径
+- 漏洞：CVE-2026-43284（DirtyFrag）
+
+---
+
+
 ## 一、支持机型
 
 | 机型 | 固件 | 内核 | KernelSU | 状态 |

@@ -521,7 +521,7 @@ static int createOrphanProcess(struct Reporter *reporter) {
 static int has_marker(const char *p) { return access(p, F_OK) == 0; }
 
 JNIEXPORT jint JNICALL
-Java_df_root_MainActivity_nativeRunAll(JNIEnv *env, jclass clz __attribute__((unused)),
+Java_df_root_ExploitRunner_nativeRunAll(JNIEnv *env, jclass clz __attribute__((unused)),
                                                jobject reporter_obj,
                                                jint encapPort, jint spi,
                                                jbyteArray aesCbcKey,

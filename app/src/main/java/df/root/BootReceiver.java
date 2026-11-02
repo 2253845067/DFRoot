@@ -1,18 +1,24 @@
 package df.root;
 
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.net.IpSecAlgorithm;
-import android.net.IpSecManager;
-import android.net.IpSecTransform;
+import android.content.pm.PackageManager;
+import android.os.PowerManager;
 import android.util.Log;
 
 import java.io.File;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.security.SecureRandom;
 
+/**
+ * Auto-root on boot (DirtyFragX UX + DFRoot s938b backend).
+ *
+ * Safety rules:
+ *  - Expert mode must be on (DirtyFragX behaviour).
+ *  - A failed run disables the receiver; the user re-enables it in the app.
+ *  - Soft-reboot is always requested on boot ({@code skipSoftReboot=false}),
+ *    matching the existing s938b BootReceiver.
+ */
 public class BootReceiver extends BroadcastReceiver implements IReporter {
     private static final String TAG = "dfroot";
 
@@ -29,57 +35,43 @@ public class BootReceiver extends BroadcastReceiver implements IReporter {
         }
         Log.i(TAG, "boot: " + intent.getAction());
         final Context deCtx = context.createDeviceProtectedStorageContext();
-        new Thread(() -> runExploit(deCtx), "dfroot-boot").start();
-    }
-
-    private void runExploit(Context context) {
-        try {
-            if (!DeviceCheck.preflight("开机自动")) {
-                Log.e(TAG, "开机自动：自检未通过 —— 已中止，不修改任何文件");
-                return;
-            }
-
-            IpSecManager ipsec = (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE);
-
-            IpSecManager.UdpEncapsulationSocket encapSock = ipsec.openUdpEncapsulationSocket();
-            int encapPort = encapSock.getPort();
-
-            InetAddress loopback = InetAddress.getByName("127.0.0.1");
-            IpSecManager.SecurityParameterIndex spiObj =
-                    ipsec.allocateSecurityParameterIndex(loopback);
-            int spiVal = spiObj.getSpi();
-
-            SecureRandom rng = new SecureRandom();
-            byte[] aesKey  = new byte[32]; rng.nextBytes(aesKey);
-            byte[] hmacKey = new byte[32]; rng.nextBytes(hmacKey);
-
-            IpSecAlgorithm enc  = new IpSecAlgorithm(IpSecAlgorithm.CRYPT_AES_CBC, aesKey);
-            IpSecAlgorithm auth = new IpSecAlgorithm(IpSecAlgorithm.AUTH_HMAC_SHA256, hmacKey, 128);
-
-            DatagramSocket senderSock = new DatagramSocket();
-            int senderPort = senderSock.getLocalPort();
-            senderSock.close();
-
-            IpSecTransform transform = new IpSecTransform.Builder(context)
-                    .setEncryption(enc)
-                    .setAuthentication(auth)
-                    .setIpv4Encapsulation(encapSock, senderPort)
-                    .buildTransportModeTransform(loopback, spiObj);
-
-            MainActivity.stageAsset(context, "ksud", true, context.getFilesDir());
-            String ksudPath = new File(context.getFilesDir(), "ksud").getAbsolutePath();
-
-            int icvLen = 128 / 8;
-            int rc = MainActivity.nativeRunAll(this, encapPort, spiVal,
-                    aesKey, hmacKey, icvLen, senderPort, ksudPath, false);
-            Log.i(TAG, "boot: exploit rc=" + rc);
-
-            transform.close();
-            spiObj.close();
-            encapSock.close();
-
-        } catch (Exception e) {
-            Log.e(TAG, "boot: exploit exception", e);
+        boolean expert = deCtx.getSharedPreferences("dfroot", Context.MODE_PRIVATE)
+                .getBoolean("expert_mode", false);
+        if (!expert) {
+            Log.i(TAG, "boot: expert mode off - autorun skipped");
+            return;
         }
+
+        boolean autoSoftReboot = deCtx.getSharedPreferences("dfroot", Context.MODE_PRIVATE)
+                .getBoolean("auto_soft_reboot", false);
+        // Mirror for any future bootstrap readers; JNI uses skipSoftReboot=false.
+        deCtx.getSharedPreferences("dfroot", Context.MODE_PRIVATE)
+                .edit().putBoolean("soft_reboot", autoSoftReboot).apply();
+
+        PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+        PowerManager.WakeLock wl = pm != null
+                ? pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "dfroot:boot")
+                : null;
+        if (wl != null) wl.acquire(10 * 60 * 1000L);
+
+        new Thread(() -> {
+            boolean ok = false;
+            try {
+                int rc = ExploitRunner.run(deCtx, this, false);
+                Log.i(TAG, "boot: exploit rc=" + rc);
+                ok = rc == 0;
+            } catch (Exception e) {
+                Log.e(TAG, "boot: exploit exception", e);
+            } finally {
+                if (wl != null && wl.isHeld()) wl.release();
+            }
+            if (!ok) {
+                Log.i(TAG, "boot: failed - disabling autorun interlock");
+                context.getPackageManager().setComponentEnabledSetting(
+                        new ComponentName(context, BootReceiver.class),
+                        PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                        PackageManager.DONT_KILL_APP);
+            }
+        }, "dfroot-boot").start();
     }
 }
