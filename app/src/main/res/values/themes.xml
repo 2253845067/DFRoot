@@ -1,6 +1,199 @@
 <resources>
-    <style name="Base.Theme.DirtyFrag" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="android:windowBackground">?attr/colorSurface</item>
+    <style name="Theme.DirtyFrag" parent="Theme.Material3.Light.NoActionBar">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="fontFamily">sans-serif</item>
+        
+        <!-- Window colors -->
+        <item name="android:windowBackground">@color/app_bg</item>
+        <item name="android:statusBarColor">@color/app_bg</item>
+        <item name="android:navigationBarColor">@color/app_bg</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="colorSurface">@color/surface_1</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorSurfaceVariant">@color/surface_2</item>
+        <item name="colorSurfaceContainerLow">@color/surface_1</item>
+        <item name="colorSurfaceContainer">@color/surface_2</item>
+        <item name="colorSurfaceContainerHigh">@color/surface_3</item>
+        <item name="colorSurfaceContainerHighest">@color/surface_4</item>
+        <item name="colorOnSurfaceVariant">@color/text_secondary</item>
+        <item name="colorOnBackground">@color/text_primary</item>
+        <!-- Keep card backgrounds pure white; elevation only drives the shadow. -->
+        <item name="elevationOverlayEnabled">false</item>
+        <item name="colorControlActivated">@color/tone_teal_primary</item>
+
+        <!-- Accent tone tokens (overridden by ThemeOverlay.DirtyFrag.Tone.*) -->
+        <item name="accentInk">@color/tone_teal_ink</item>
+        <item name="accentFill">@color/tone_teal_fill</item>
+        <item name="accentOn">@color/tone_teal_on_fill</item>
+        <item name="accentContainer">@color/tone_teal_container</item>
+        <item name="accentSolid">@color/tone_teal_solid</item>
+
+        <!-- Primary colors -->
+        <item name="colorPrimary">@color/tone_teal_primary</item>
+        <item name="colorOnPrimary">@color/tone_teal_on_primary</item>
+        <item name="colorPrimaryContainer">@color/tone_teal_container</item>
+        <item name="colorOnPrimaryContainer">@color/tone_teal_ink</item>
+        
+        <!-- Secondary colors -->
+        <item name="colorSecondary">@color/tone_teal_primary</item>
+        <item name="colorOnSecondary">@color/tone_teal_on_primary</item>
+        <item name="colorSecondaryContainer">@color/tone_teal_container</item>
+        <item name="colorOnSecondaryContainer">@color/tone_teal_ink</item>
+        
+        <!-- Tertiary colors -->
+        <item name="colorTertiary">@color/accent_amber</item>
+        <item name="colorOnTertiary">@color/surface_0</item>
+        <item name="colorTertiaryContainer">@color/muted_amber</item>
+        <item name="colorOnTertiaryContainer">@color/accent_amber</item>
+        
+        <!-- Error colors -->
+        <item name="colorError">@color/error</item>
+        <item name="colorOnError">@color/white</item>
+        
+        <!-- Background -->
+        <item name="android:colorBackground">@color/app_bg</item>
+        <item name="colorOnBackground">@color/text_primary</item>
+        
+        <!-- Outline -->
+        <item name="colorOutline">@color/surface_3</item>
+        
+        <!-- Interaction colors -->
+        <item name="colorControlHighlight">#332F6F73</item>
+        
+        <!-- Text appearances -->
+        <item name="textAppearanceLabelLarge">@style/TextAppearance.Material3.LabelLarge</item>
+        
+        <!-- Splash screen -->
+        <item name="android:windowSplashScreenBackground">@color/app_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+        
+        <!-- Popup menu -->
+        <item name="popupMenuStyle">@style/DF_PopupMenu</item>
+        <item name="android:popupMenuStyle">@style/DF_PopupMenu</item>
+        <item name="actionOverflowMenuStyle">@style/DF_OverflowMenu</item>
+        <item name="dropDownListViewStyle">@style/DF_DropDownListView</item>
+        <item name="android:itemTextAppearance">@style/DF_MenuText</item>
+        <item name="textAppearanceListItemSmall">@style/DF_MenuText</item>
+        <item name="listPreferredItemHeightSmall">56dp</item>
+        <item name="listPreferredItemPaddingLeft">12dp</item>
+        <item name="listPreferredItemPaddingRight">12dp</item>
     </style>
-    <style name="Theme.DirtyFrag" parent="Base.Theme.DirtyFrag" />
+    
+    <style name="DF_MenuText" parent="TextAppearance.AppCompat">
+        <item name="android:textSize">15sp</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:gravity">center</item>
+    </style>
+    
+    <style name="ShapeCircle">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+    </style>
+    
+    <style name="DF_PopupMenu" parent="Widget.Material3.PopupMenu">
+        <item name="android:popupBackground">@drawable/popup_bg</item>
+        <item name="android:popupElevation">24dp</item>
+    </style>
+    
+    <style name="DF_OverflowMenu" parent="Widget.Material3.PopupMenu.Overflow">
+        <item name="android:popupBackground">@drawable/popup_bg</item>
+        <item name="android:popupElevation">24dp</item>
+    </style>
+    
+    <style name="DF_DropDownListView" parent="Widget.AppCompat.ListView.DropDown">
+        <item name="android:divider">@drawable/menu_divider</item>
+        <item name="android:dividerHeight">1dp</item>
+        <item name="android:listSelector">@drawable/menu_item_ripple</item>
+    </style>
+    
+    <style name="ToolbarTitle" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:textFontWeight">700</item>
+        <item name="android:textSize">24sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/text_primary</item>
+    </style>
+
+    <!-- Font overlays. Default theme uses system sans-serif; Fang Yuan is opt-in. -->
+    <style name="ThemeOverlay.DirtyFrag.Font.FangYuan" parent="">
+        <item name="android:fontFamily">@font/alimama_fang_yuan</item>
+        <item name="fontFamily">@font/alimama_fang_yuan</item>
+    </style>
+
+    <!-- Accent tone overlays. Applied in onCreate before setContentView. -->
+    <style name="ThemeOverlay.DirtyFrag.Tone.Teal" parent="">
+        <item name="accentInk">@color/tone_teal_ink</item>
+        <item name="accentFill">@color/tone_teal_fill</item>
+        <item name="accentOn">@color/tone_teal_on_fill</item>
+        <item name="accentContainer">@color/tone_teal_container</item>
+        <item name="accentSolid">@color/tone_teal_solid</item>
+        <item name="colorPrimary">@color/tone_teal_primary</item>
+        <item name="colorOnPrimary">@color/tone_teal_on_primary</item>
+        <item name="colorPrimaryContainer">@color/tone_teal_container</item>
+        <item name="colorOnPrimaryContainer">@color/tone_teal_ink</item>
+        <item name="colorSecondary">@color/tone_teal_primary</item>
+        <item name="colorOnSecondary">@color/tone_teal_on_primary</item>
+        <item name="colorSecondaryContainer">@color/tone_teal_container</item>
+        <item name="colorOnSecondaryContainer">@color/tone_teal_ink</item>
+        <item name="colorControlActivated">@color/tone_teal_primary</item>
+        <item name="colorAccent">@color/tone_teal_primary</item>
+        <item name="android:colorAccent">@color/tone_teal_primary</item>
+    </style>
+
+    <style name="ThemeOverlay.DirtyFrag.Tone.Blue" parent="">
+        <item name="accentInk">@color/tone_blue_ink</item>
+        <item name="accentFill">@color/tone_blue_fill</item>
+        <item name="accentOn">@color/tone_blue_on_fill</item>
+        <item name="accentContainer">@color/tone_blue_container</item>
+        <item name="accentSolid">@color/tone_blue_solid</item>
+        <item name="colorPrimary">@color/tone_blue_primary</item>
+        <item name="colorOnPrimary">@color/tone_blue_on_primary</item>
+        <item name="colorPrimaryContainer">@color/tone_blue_container</item>
+        <item name="colorOnPrimaryContainer">@color/tone_blue_ink</item>
+        <item name="colorSecondary">@color/tone_blue_primary</item>
+        <item name="colorOnSecondary">@color/tone_blue_on_primary</item>
+        <item name="colorSecondaryContainer">@color/tone_blue_container</item>
+        <item name="colorOnSecondaryContainer">@color/tone_blue_ink</item>
+        <item name="colorControlActivated">@color/tone_blue_primary</item>
+        <item name="colorAccent">@color/tone_blue_primary</item>
+        <item name="android:colorAccent">@color/tone_blue_primary</item>
+    </style>
+
+    <style name="ThemeOverlay.DirtyFrag.Tone.Purple" parent="">
+        <item name="accentInk">@color/tone_purple_ink</item>
+        <item name="accentFill">@color/tone_purple_fill</item>
+        <item name="accentOn">@color/tone_purple_on_fill</item>
+        <item name="accentContainer">@color/tone_purple_container</item>
+        <item name="accentSolid">@color/tone_purple_solid</item>
+        <item name="colorPrimary">@color/tone_purple_primary</item>
+        <item name="colorOnPrimary">@color/tone_purple_on_primary</item>
+        <item name="colorPrimaryContainer">@color/tone_purple_container</item>
+        <item name="colorOnPrimaryContainer">@color/tone_purple_ink</item>
+        <item name="colorSecondary">@color/tone_purple_primary</item>
+        <item name="colorOnSecondary">@color/tone_purple_on_primary</item>
+        <item name="colorSecondaryContainer">@color/tone_purple_container</item>
+        <item name="colorOnSecondaryContainer">@color/tone_purple_ink</item>
+        <item name="colorControlActivated">@color/tone_purple_primary</item>
+        <item name="colorAccent">@color/tone_purple_primary</item>
+        <item name="android:colorAccent">@color/tone_purple_primary</item>
+    </style>
+
+    <style name="ThemeOverlay.DirtyFrag.Tone.Amber" parent="">
+        <item name="accentInk">@color/tone_amber_ink</item>
+        <item name="accentFill">@color/tone_amber_fill</item>
+        <item name="accentOn">@color/tone_amber_on_fill</item>
+        <item name="accentContainer">@color/tone_amber_container</item>
+        <item name="accentSolid">@color/tone_amber_solid</item>
+        <item name="colorPrimary">@color/tone_amber_primary</item>
+        <item name="colorOnPrimary">@color/tone_amber_on_primary</item>
+        <item name="colorPrimaryContainer">@color/tone_amber_container</item>
+        <item name="colorOnPrimaryContainer">@color/tone_amber_ink</item>
+        <item name="colorSecondary">@color/tone_amber_primary</item>
+        <item name="colorOnSecondary">@color/tone_amber_on_primary</item>
+        <item name="colorSecondaryContainer">@color/tone_amber_container</item>
+        <item name="colorOnSecondaryContainer">@color/tone_amber_ink</item>
+        <item name="colorControlActivated">@color/tone_amber_primary</item>
+        <item name="colorAccent">@color/tone_amber_primary</item>
+        <item name="android:colorAccent">@color/tone_amber_primary</item>
+    </style>
 </resources>

@@ -1,294 +1,949 @@
 package df.root;
 
-import android.content.ComponentName;
 import android.content.Context;
+import android.content.ComponentName;
+import android.content.ContentValues;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
-import android.content.res.ColorStateList;
-import android.content.res.Configuration;
-import android.graphics.Color;
-import android.net.IpSecAlgorithm;
-import android.net.IpSecManager;
-import android.net.IpSecTransform;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.HapticFeedbackConstants;
+import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewGroup;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.TextView;
-
+import androidx.core.graphics.ColorUtils;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
-import androidx.core.view.WindowInsetsControllerCompat;
 
-import com.google.android.material.color.MaterialColors;
-
+import df.root.BuildConfig;
 import df.root.databinding.ActivityMainBinding;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
-public class MainActivity extends AppCompatActivity implements IReporter {
+public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "dfroot";
 
-    static { System.loadLibrary("exp"); }
-
     private ActivityMainBinding binding;
+    /** Each page lives in its own layout, so its controls are reached through
+     *  the fragment view that currently holds them. Null until that page has
+     *  been created by the pager. */
+    private View homeView;
+    private View settingsView;
     private final Handler mMain = new Handler(Looper.getMainLooper());
     private final Executor mExec = Executors.newSingleThreadExecutor();
+    private File lastLogFile;
+    private boolean running;
+    private boolean expertMode;
+    private int selectedNav = R.id.nav_home;
+    private boolean moduleRefresh;
+    private boolean mBootReceiverEnabled;
+    private boolean mLastFailed;
 
-    public void report(String msg) {
-        mMain.post(() -> {
-            binding.outputPlaceholder.setVisibility(View.GONE);
-            binding.outputView.append(msg);
-            binding.outputScroll.post(() -> binding.outputScroll.fullScroll(View.FOCUS_DOWN));
-        });
+    /** Device-protected storage context: bootstrap.c reads its prefs from
+     *  /data/user_de/0/df.root/, so every pref the exploit depends on must live
+     *  there, not in credential-protected storage. */
+    private Context mDeCtx;
+    /** Package name of the SU manager whose libksud.so gets staged, or null. */
+    private String suManagerPkg;
+    /** A failed run locks the Run button until reboot (page-cache patch). */
+    private boolean failedRun;
+    private UpdateChecker updateChecker;
+
+    /** Called by HomeFragment once its layout exists. */
+    @SuppressWarnings("unchecked")
+    <T extends View> T home(int id) {
+        View v = homeView == null ? null : homeView.findViewById(id);
+        return v == null ? null : (T) v;
     }
 
-    static native int nativeRunAll(IReporter reporter, int encapPort, int spi,
-                                    byte[] aesCbcKey, byte[] hmacKey, int icvLen,
-                                    int senderPort, String ksudPath, boolean skipSoftReboot);
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-        binding = ActivityMainBinding.inflate(getLayoutInflater());
-        setContentView(binding.getRoot());
-
-        applyInsets();
-        applySystemBarAppearance();
-        populateDeviceInfo();
-        refreshRunState();
-
-        binding.btnRun.setOnClickListener(v -> {
-            binding.btnRun.setEnabled(false);
-            binding.outputView.setText("");
-            binding.outputPlaceholder.setVisibility(View.VISIBLE);
-            setRunningState();
-            mExec.execute(this::runExploit);
-        });
-
-        binding.btnClearOutput.setOnClickListener(v -> {
-            binding.outputView.setText("");
-            binding.outputPlaceholder.setVisibility(View.VISIBLE);
-        });
-
-        ComponentName bootReceiver = new ComponentName(this, BootReceiver.class);
-        int state = getPackageManager().getComponentEnabledSetting(bootReceiver);
-        binding.switchBootStart.setChecked(state == PackageManager.COMPONENT_ENABLED_STATE_ENABLED);
-        binding.switchBootStart.setOnCheckedChangeListener((btn, checked) ->
-            getPackageManager().setComponentEnabledSetting(bootReceiver,
-                checked ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                        : PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                PackageManager.DONT_KILL_APP));
+    /** Called by SettingsFragment once its layout exists. */
+    @SuppressWarnings("unchecked")
+    <T extends View> T settings(int id) {
+        return settingsView == null ? null : (T) settingsView.findViewById(id);
     }
 
-    private void applyInsets() {
-        ViewCompat.setOnApplyWindowInsetsListener(binding.getRoot(), (v, insets) -> {
-            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            binding.content.setPadding(dp(20), dp(20) + bars.top, dp(20), dp(24));
-            binding.bottomBarWrapper.setPadding(dp(16), dp(8), dp(16), dp(16) + bars.bottom);
-            return insets;
-        });
+    /** HomeFragment's layout is live: bind what belongs to the home page. */
+    void onHomeViewReady(View v) {
+        homeView = v;
+        // onCreate ran loadSuManagerPref() before this view existed, so its
+        // label/icon writes went nowhere. Re-run it now that the card is there.
+        loadSuManagerPref();
+        initHomeControls();
+        applyRestoredHomeState();
     }
 
-    private void applySystemBarAppearance() {
-        boolean dark = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
-                == Configuration.UI_MODE_NIGHT_YES;
-        WindowInsetsControllerCompat controller =
-                WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
-        controller.setAppearanceLightStatusBars(!dark);
-        controller.setAppearanceLightNavigationBars(!dark);
-        getWindow().setStatusBarColor(Color.TRANSPARENT);
-        getWindow().setNavigationBarColor(Color.TRANSPARENT);
+    /** Pager positions: 0 = Home, 1 = Settings. */
+    private static int pageForNav(int navId) {
+        return navId == R.id.nav_settings ? 1 : 0;
     }
 
-    private void populateDeviceInfo() {
-        addInfoRow(R.drawable.ic_phone, getString(R.string.info_model),
-                Build.MANUFACTURER + " " + Build.MODEL);
-        addInfoRow(R.drawable.ic_firmware, getString(R.string.info_firmware), Build.DISPLAY);
-        addInfoRow(R.drawable.ic_memory, getString(R.string.info_kernel), DeviceCheck.release());
-        addInfoRow(R.drawable.ic_build, getString(R.string.info_kmi), DeviceCheck.kmi());
+    private static int navForPage(int position) {
+        return position == 1 ? R.id.nav_settings : R.id.nav_home;
     }
 
-    private void addInfoRow(int iconRes, String label, String value) {
-        if (binding.deviceInfoContainer.getChildCount() > 0) {
-            View divider = new View(this);
-            divider.setLayoutParams(new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, dp(1)));
-            divider.setBackgroundColor(MaterialColors.getColor(binding.deviceInfoContainer,
-                    com.google.android.material.R.attr.colorOutlineVariant));
-            binding.deviceInfoContainer.addView(divider);
+    /** SettingsFragment's layout is live: bind what belongs to settings. */
+    void onSettingsViewReady(View v) {
+        settingsView = v;
+        initSettingsControls();
+    }
+
+    private int bootCount() {
+        try {
+            return android.provider.Settings.Global.getInt(getContentResolver(),
+                    android.provider.Settings.Global.BOOT_COUNT, -1);
+        } catch (Exception e) {
+            return -1;
         }
-
-        View row = getLayoutInflater().inflate(R.layout.item_info_row,
-                binding.deviceInfoContainer, false);
-        ((ImageView) row.findViewById(R.id.infoIcon)).setImageResource(iconRes);
-        ((TextView) row.findViewById(R.id.infoLabel)).setText(label);
-        ((TextView) row.findViewById(R.id.infoValue)).setText(value);
-        binding.deviceInfoContainer.addView(row);
     }
 
     /**
-     * 只有在确实安全时才允许运行：
-     *  - 本轮已经开过钩（/dev/df）；
-     *  - 检测到别的 root 方案已经在生效（/system/bin/su 等仍然存在）。
-     * 后者会让 ksud 跳过加载模块、停留在 vendor_modprobe 域，最终安装失败并把
-     * su 截成 0 字节 —— 实测过，所以直接拦住。
+     * Screen zoom and Font size are locked for the duration of the activity:
+     * the pill, toolbar and card geometry were all measured at one screen
+     * width in dp and stop agreeing with each other as soon as it moves. See
+     * {@link ScaleFix} for why the anchor is a width and not a dpi value.
      */
-    private void refreshRunState() {
-        String reason = DeviceCheck.blockReason();
-        if (reason == null) {
-            binding.statusText.setText(R.string.status_ready_title);
-            binding.statusDetail.setText(R.string.status_ready_detail);
-            binding.statusBadge.setText(R.string.badge_ready);
-            applyStatus(com.google.android.material.R.attr.colorSecondaryContainer,
-                    com.google.android.material.R.attr.colorOnSecondaryContainer,
-                    androidx.appcompat.R.attr.colorPrimary,
-                    com.google.android.material.R.attr.colorOnPrimary,
-                    R.drawable.ic_shield_check);
-            binding.btnRun.setEnabled(true);
-            binding.btnRun.setText(R.string.btn_run);
+    static java.util.Locale localeFor(String lang) {
+        if ("en".equals(lang)) return java.util.Locale.ENGLISH;
+        if ("zh-TW".equals(lang) || "zh_TW".equals(lang) || "zh-Hant".equals(lang))
+            return java.util.Locale.TRADITIONAL_CHINESE;
+        return java.util.Locale.SIMPLIFIED_CHINESE;
+    }
+
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        SharedPreferences prefs = newBase.createDeviceProtectedStorageContext()
+                .getSharedPreferences("dfroot", MODE_PRIVATE);
+        java.util.Locale locale = localeFor(prefs.getString("language", "zh-CN"));
+        java.util.Locale.setDefault(locale);
+        android.content.res.Configuration config = new android.content.res.Configuration(
+                newBase.getResources().getConfiguration());
+        config.setLocale(locale);
+        super.attachBaseContext(ScaleFix.wrap(newBase.createConfigurationContext(config)));
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        applyThemeAndLanguage();
+        super.onCreate(savedInstanceState);
+        applyAccentTone();
+        applyUiFont();
+        mDeCtx = createDeviceProtectedStorageContext();
+        binding = ActivityMainBinding.inflate(getLayoutInflater());
+        setContentView(binding.getRoot());
+
+        // Setup ViewPager2 with fragments: Home / Settings.
+        MainPagerAdapter pagerAdapter = new MainPagerAdapter(this);
+        binding.viewPager.setAdapter(pagerAdapter);
+        binding.viewPager.setUserInputEnabled(true);
+
+        failedRun = savedInstanceState != null && savedInstanceState.getBoolean("failed_run", false);
+
+        // The header is the app's name and nothing else. The version number that
+        // used to ride next to it is still recorded, just not in the one line of
+        // chrome the user has to look past to reach the cards: on every start here,
+        // and in the run log as "app version: ..." (ExploitRunner). What takes the
+        // headline instead is the update pill, but only once the check below has
+        // something to say - see showUpdatePill.
+        Log.i(TAG, "version " + BuildConfig.VERSION_NAME);
+        // NOTE: no app bar - the home page carries its own headline, so there is
+        // no toolbar title, update pill or header controls to keep in sync.
+
+        // Startup update check. Gitee and GitHub are queried side by side and
+        // the faster answer wins, so mainland users hit Gitee and everyone else
+        // hits GitHub without an unreliable IP/region lookup. A hit downloads
+        // the APK in-app and hands it to the system installer.
+        updateChecker = new UpdateChecker(this);
+        // Theme, accent and language switches call recreate(), which re-runs
+        // onCreate. Those are not launches, so only the first create of this
+        // activity (savedInstanceState == null) starts the network checks.
+        if (savedInstanceState == null) {
+            updateChecker.checkOnStart();
+            // The announcement is fetched from every mirror on each launch and
+            // has to be acknowledged with its button before it goes away.
+            updateChecker.checkAnnouncement();
+        }
+
+        // SU Manager card: upstream 3.2 deleted the bundled assets/ksud, so the
+        // exploit stages libksud.so out of the chosen manager's
+        // nativeLibraryDir and refuses to run without one. Only apps that
+        // actually ship that library are offered.
+        loadSuManagerPref();
+
+        if (isRooted()) {
+            setRootedState();
+        }
+
+        // A log saved before the current boot is stale: delete it so a reboot
+        // always starts with a clean run screen; RunActivity replays whatever
+        // is left.
+        lastLogFile = new File(mDeCtx.getFilesDir(), "last_run.log");
+        int savedBoot = mDeCtx.getSharedPreferences("dfroot", MODE_PRIVATE)
+                .getInt("log_boot_count", -1);
+        if (lastLogFile.exists() && savedBoot != bootCount()) {
+            lastLogFile.delete();
+            mDeCtx.getSharedPreferences("dfroot", MODE_PRIVATE)
+                    .edit().putBoolean("last_run_success", false).apply();
+        }
+
+        // A failed run since the last boot paints the home status card red.
+        mLastFailed = lastLogFile.exists() && !mDeCtx
+                .getSharedPreferences("dfroot", MODE_PRIVATE)
+                .getBoolean("last_run_success", true);
+
+        ComponentName bootReceiver = new ComponentName(this, BootReceiver.class);
+        mBootReceiverEnabled = getPackageManager().getComponentEnabledSetting(bootReceiver)
+                == PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
+
+        // Expert mode gates the boot options in settings.
+        expertMode = BootReceiver.isExpertMode(this);
+
+        selectedNav = savedInstanceState == null ? R.id.nav_home
+                : savedInstanceState.getInt("selected_nav", R.id.nav_home);
+        
+        // Sync BottomNavigation with ViewPager2
+        binding.viewPager.registerOnPageChangeCallback(new androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback() {
+            @Override
+            public void onPageSelected(int position) {
+                selectedNav = navForPage(position);
+                binding.bottomNavigation.setSelectedItemId(selectedNav);
+            }
+        });
+        
+        binding.bottomNavigation.setOnItemSelectedListener(item -> {
+            if (item.getItemId() == R.id.nav_home) {
+                binding.viewPager.setCurrentItem(0, true);
+                selectedNav = R.id.nav_home;
+                return true;
+            } else if (item.getItemId() == R.id.nav_settings) {
+                binding.viewPager.setCurrentItem(1, true);
+                selectedNav = R.id.nav_settings;
+                return true;
+            }
+            return false;
+        });
+        
+        // Set initial page
+        binding.viewPager.setCurrentItem(pageForNav(selectedNav), false);
+        binding.bottomNavigation.setSelectedItemId(selectedNav);
+
+        // Run stays locked until an SU manager is selected (and, after a failed
+        // run, until the device has been rebooted).
+        updateRunButton();
+    }
+
+    /** Home page bindings. Runs once HomeFragment's view exists. */
+    private void initHomeControls() {
+        View row = home(R.id.rowSuManager);
+        if (row != null) {
+            row.setOnClickListener(v -> {
+                v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                showSuManagerPopup();
+            });
+        }
+
+        View run = home(R.id.btnRun);
+        if (run != null) {
+            // The button opens the dedicated run screen and starts immediately;
+            // once rooted it only opens the saved log.
+            run.setOnClickListener(v -> openRun(true));
+            // Subtle push-in
+            run.setOnTouchListener((v, ev) -> {
+                switch (ev.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                        v.animate().scaleX(0.94f).scaleY(0.94f).setDuration(80).start();
+                        break;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        v.animate().scaleX(1f).scaleY(1f).setDuration(120).start();
+                        break;
+                    default:
+                        break;
+                }
+                return false;
+            });
+        }
+
+        View ksu = home(R.id.rowSuManager);
+        if (ksu != null) ksu.setOnLongClickListener(v -> {
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            openKsu();
+            return true;
+        });
+
+        fillDeviceInfo();
+        View copyInfo = home(R.id.btnCopyDeviceInfo);
+        if (copyInfo != null) {
+            copyInfo.setOnClickListener(v -> {
+                v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                copyDeviceInfo();
+            });
+        }
+
+        View softReboot = home(R.id.btnSoftReboot);
+        if (softReboot != null) {
+            softReboot.setOnClickListener(v -> {
+                v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                showSoftRebootMenu(v);
+            });
+        }
+        updateRunButton();
+    }
+
+    /** Static device facts shown at the bottom of the home page. */
+    private void fillDeviceInfo() {
+        TextView model = home(R.id.deviceModel);
+        if (model != null) {
+            String maker = Build.MANUFACTURER == null ? "" : Build.MANUFACTURER.trim();
+            if (!maker.isEmpty()) {
+                maker = Character.toUpperCase(maker.charAt(0)) + maker.substring(1);
+            }
+            model.setText((maker + " " + Build.MODEL).trim());
+        }
+        TextView system = home(R.id.deviceSystem);
+        if (system != null) {
+            system.setText(Build.VERSION.RELEASE + " · API " + Build.VERSION.SDK_INT);
+        }
+        TextView kernel = home(R.id.deviceKernel);
+        if (kernel != null) {
+            kernel.setText(System.getProperty("os.version", "unknown"));
+        }
+        TextView arch = home(R.id.deviceArch);
+        if (arch != null) {
+            String[] abis = Build.SUPPORTED_ABIS;
+            arch.setText(abis != null && abis.length > 0 ? abis[0] : "unknown");
+        }
+        TextView fingerprint = home(R.id.deviceFingerprint);
+        if (fingerprint != null) {
+            fingerprint.setText(Build.FINGERPRINT == null ? "unknown" : Build.FINGERPRINT);
+        }
+    }
+
+    /** Copies the whole info block as plain "label: value" lines. */
+    private void copyDeviceInfo() {
+        StringBuilder sb = new StringBuilder();
+        appendInfoLine(sb, R.string.info_device, R.id.deviceModel);
+        appendInfoLine(sb, R.string.info_system, R.id.deviceSystem);
+        appendInfoLine(sb, R.string.info_kernel, R.id.deviceKernel);
+        appendInfoLine(sb, R.string.info_arch, R.id.deviceArch);
+        appendInfoLine(sb, R.string.info_fingerprint, R.id.deviceFingerprint);
+        android.content.ClipboardManager cm =
+                (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (cm == null) return;
+        cm.setPrimaryClip(android.content.ClipData.newPlainText(
+                getString(R.string.device_info), sb.toString()));
+        android.widget.Toast.makeText(this, R.string.device_info_copied,
+                android.widget.Toast.LENGTH_SHORT).show();
+    }
+
+    private void appendInfoLine(StringBuilder sb, int label, int valueId) {
+        TextView value = home(valueId);
+        if (value == null) return;
+        if (sb.length() > 0) sb.append('\n');
+        sb.append(getString(label)).append(": ").append(value.getText());
+    }
+
+    /** Applies the current state to the status card. The log itself is
+     *  replayed when the run page is created. */
+    private void applyRestoredHomeState() {
+        if (mLastFailed && !isRooted()) {
+            setFailedState();
         } else {
-            binding.statusText.setText(R.string.status_blocked_title);
-            binding.statusDetail.setText(reason);
-            binding.statusBadge.setText(R.string.badge_blocked);
-            applyStatus(com.google.android.material.R.attr.colorErrorContainer,
-                    com.google.android.material.R.attr.colorOnErrorContainer,
-                    androidx.appcompat.R.attr.colorError,
-                    com.google.android.material.R.attr.colorOnError,
-                    R.drawable.ic_error);
-            binding.btnRun.setEnabled(false);
-            binding.btnRun.setText(R.string.btn_run_blocked);
+            updateRunButton();
         }
     }
 
-    private void setRunningState() {
-        binding.statusText.setText(R.string.status_running_title);
-        binding.statusDetail.setText(R.string.status_running_detail);
-        binding.statusBadge.setText(R.string.badge_running);
-        applyStatus(com.google.android.material.R.attr.colorSecondaryContainer,
-                com.google.android.material.R.attr.colorOnSecondaryContainer,
-                androidx.appcompat.R.attr.colorPrimary,
-                com.google.android.material.R.attr.colorOnPrimary,
-                R.drawable.ic_autorenew);
-        binding.btnRun.setEnabled(false);
-        binding.btnRun.setText(R.string.btn_run_running);
+    /** Settings page bindings. Runs once SettingsFragment's view exists. */
+    private void initSettingsControls() {
+        // KSU modules toggle: since 3.2 this is a plain preference, not a root
+        // operation. bootstrap.c reads disable_modules and touches a `disable`
+        // flag file in every installed module before ksud runs, so the toggle
+        // works before the device is rooted and applies on the next root.
+        com.google.android.material.materialswitch.MaterialSwitch modules =
+                settings(R.id.switchModules);
+        if (modules != null) {
+            moduleRefresh = true;
+            modules.setChecked(!mDeCtx.getSharedPreferences("dfroot", MODE_PRIVATE)
+                    .getBoolean("disable_modules", false));
+            moduleRefresh = false;
+            View subtitle = settings(R.id.modulesSubtitle);
+            if (subtitle instanceof TextView) {
+                ((TextView) subtitle).setText(modules.isChecked()
+                        ? R.string.modules_enabled : R.string.modules_disabled);
+            }
+            modules.setOnCheckedChangeListener((btn, on) -> {
+                if (moduleRefresh) return;
+                btn.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                applyModuleState(on);
+            });
+        }
+
+        com.google.android.material.materialswitch.MaterialSwitch expert =
+                settings(R.id.switchExpertMode);
+        if (expert != null) {
+            expert.setChecked(expertMode);
+            expert.setOnCheckedChangeListener((btn, checked) -> {
+                expertMode = checked;
+                mDeCtx.getSharedPreferences("dfroot", MODE_PRIVATE).edit()
+                        .putBoolean("expert_mode", checked).apply();
+                applyExpertMode();
+            });
+        }
+
+        ComponentName bootReceiver = new ComponentName(this, BootReceiver.class);
+        com.google.android.material.materialswitch.MaterialSwitch boot =
+                settings(R.id.switchBootStart);
+        if (boot != null) {
+            boot.setChecked(mBootReceiverEnabled);
+            boot.setOnCheckedChangeListener((btn, checked) -> {
+                getPackageManager().setComponentEnabledSetting(bootReceiver,
+                        checked ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                                : PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                        PackageManager.DONT_KILL_APP);
+            });
+        }
+
+        boolean autoSoftReboot = createDeviceProtectedStorageContext()
+                .getSharedPreferences("dfroot", MODE_PRIVATE)
+                .getBoolean("auto_soft_reboot", true);
+        com.google.android.material.materialswitch.MaterialSwitch soft =
+                settings(R.id.switchAutoSoftReboot);
+        if (soft != null) {
+            soft.setChecked(autoSoftReboot);
+            soft.setOnCheckedChangeListener((btn, checked) ->
+                    createDeviceProtectedStorageContext()
+                            .getSharedPreferences("dfroot", MODE_PRIVATE)
+                            .edit().putBoolean("auto_soft_reboot", checked).apply());
+        }
+
+        applyExpertMode();
+        setupAppearanceSelectors();
+
+        View[] links = {
+                settings(R.id.rowOriginal), settings(R.id.repoOriginalLabel),
+                settings(R.id.repoOriginalUrl)};
+        for (View link : links) {
+            if (link != null) link.setOnClickListener(v ->
+                    openUrl(getString(R.string.repo_original_url)));
+        }
+        View[] fork = {
+                settings(R.id.rowFork), settings(R.id.repoForkLabel),
+                settings(R.id.repoForkUrl)};
+        for (View link : fork) {
+            if (link != null) link.setOnClickListener(v ->
+                    openUrl(getString(R.string.repo_fork_url)));
+        }
+        View[] community = {
+                settings(R.id.rowCommunity), settings(R.id.communityLabel),
+                settings(R.id.communityDesc)};
+        for (View link : community) {
+            if (link != null) link.setOnClickListener(v ->
+                    openUrl(getString(R.string.community_url)));
+        }
+
+        TextView updateVersion = settings(R.id.updateCheckVersion);
+        if (updateVersion != null) {
+            updateVersion.setText(getString(R.string.update_current_version,
+                    BuildConfig.VERSION_NAME));
+        }
+        View updateCheck = settings(R.id.rowUpdateCheck);
+        if (updateCheck != null) {
+            updateCheck.setOnClickListener(v -> {
+                if (updateChecker != null) updateChecker.checkManually();
+            });
+        }
     }
 
-    private void applyStatus(int containerAttr, int onContainerAttr,
-                             int badgeBgAttr, int badgeFgAttr, int iconRes) {
-        int container = MaterialColors.getColor(binding.statusCard, containerAttr);
-        int onContainer = MaterialColors.getColor(binding.statusCard, onContainerAttr);
-        int badgeBg = MaterialColors.getColor(binding.statusCard, badgeBgAttr);
-        int badgeFg = MaterialColors.getColor(binding.statusCard, badgeFgAttr);
-
-        binding.statusCard.setCardBackgroundColor(container);
-        binding.statusText.setTextColor(onContainer);
-        binding.statusDetail.setTextColor(onContainer);
-        binding.statusDetail.setAlpha(0.75f);
-        binding.statusIcon.setImageResource(iconRes);
-        binding.statusIcon.setImageTintList(ColorStateList.valueOf(onContainer));
-        binding.statusBadge.setChipBackgroundColor(ColorStateList.valueOf(badgeBg));
-        binding.statusBadge.setTextColor(badgeFg);
+    /** Opens the dedicated run screen. autoStart is ignored once root is
+     *  already present: the screen then only shows the saved log. */
+    private void openRun(boolean autoStart) {
+        Intent intent = new Intent(this, RunActivity.class);
+        intent.putExtra(RunActivity.EXTRA_AUTO_RUN, autoStart && canRun());
+        startActivity(intent);
     }
 
-    private void runExploit() {
+    /** Expert mode off: the autorun / auto-reboot cards are simply not shown.
+     *  The two switches are independent: autorun only decides whether a run
+     *  starts at boot, auto soft reboot only decides what happens after a
+     *  successful run (manual or boot). */
+    private void applyExpertMode() {
+        int vis = expertMode ? View.VISIBLE : View.GONE;
+        View autorun = settings(R.id.cardAutorun);
+        View reboot = settings(R.id.cardAutoReboot);
+        if (autorun != null) autorun.setVisibility(vis);
+        if (reboot != null) reboot.setVisibility(vis);
+    }
+
+    /** Re-read the SU manager selection when returning to the app: the user may
+     *  have installed or uninstalled a manager while we were in the background,
+     *  and the Run button has to reflect that immediately. The run screen is a
+     *  separate activity, so its result is picked up from the saved prefs. */
+    @Override
+    protected void onResume() {
+        super.onResume();
+        loadSuManagerPref();
+        mLastFailed = lastLogFile != null && lastLogFile.exists() && !mDeCtx
+                .getSharedPreferences("dfroot", MODE_PRIVATE)
+                .getBoolean("last_run_success", true);
+        if (mLastFailed && !isRooted()) {
+            setFailedState();
+        } else {
+            updateRunButton();
+        }
+    }
+
+    private void setRootedState() {
+        setRootedState(true);
+    }
+
+    /** Applies the Modules card. Since 3.2 this is a preference write, not a
+     *  root operation: bootstrap.c reads disable_modules and touches a
+     *  `disable` flag file in every installed module before it starts ksud
+     *  (a broken module otherwise bootloops the device). OFF = modules stay
+     *  disabled on the next root, ON = modules load. No su required. */
+    private void applyModuleState(boolean on) {
+        SharedPreferences sp = mDeCtx.getSharedPreferences("dfroot", MODE_PRIVATE);
+        SharedPreferences.Editor ed = sp.edit();
+        if (on) ed.remove("disable_modules");
+        else ed.putBoolean("disable_modules", true);
+        ed.apply();
+        // The subtitle is the whole message. Nothing is announced over the bottom
+        // of the screen for a switch the user can already see move.
+        View subtitle = settings(R.id.modulesSubtitle);
+        if (subtitle instanceof TextView) {
+            ((TextView) subtitle).setText(on
+                    ? R.string.modules_enabled : R.string.modules_disabled);
+        }
+    }
+
+    // ---- Bundled ksud card ------------------------------------------------
+
+    /** DFRoot ships assets/ksud (Samsung KernelSU 32687). The external SU
+     *  manager picker from DirtyFragX is intentionally not used: the exploit
+     *  stages the bundled asset, so a selected external manager would have no
+     *  effect and only require QUERY_ALL_PACKAGES. */
+    private void loadSuManagerPref() {
+        suManagerPkg = "df.root.bundled";
+        mDeCtx.getSharedPreferences("dfroot", MODE_PRIVATE)
+                .edit().putString("su_manager", suManagerPkg).apply();
+        renderSuManagerCard();
+    }
+
+    /** Writes the built-in ksud label into the home card. */
+    private void renderSuManagerCard() {
+        TextView sub = home(R.id.suManagerSubtitle);
+        if (sub != null) {
+            sub.setText(R.string.su_bundled);
+            sub.setTextColor(getColor(R.color.text_secondary));
+        }
+        android.widget.ImageView icon = home(R.id.imgSuManager);
+        if (icon != null) icon.setVisibility(View.GONE);
+    }
+
+    /** The card is informational; tapping explains that the ksud is bundled. */
+    private void showSuManagerPopup() {
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle(R.string.su_manager)
+                .setMessage(R.string.su_bundled_desc)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
+    }
+
+    /** /dev/df is created by the shellcode with mode 0000, so the app uid can
+     *  never read or write it - permission probes always failed. /dev/dfm6 is
+     *  touched by bootstrap.c only after `ksud late-load` succeeded, which is
+     *  the actual root marker; /dev/df alone can be left over from a failed
+     *  run. Both live in /dev, which is recreated on a real reboot. */
+    private static boolean isRooted() {
+        return new File("/dev/df").exists() || DeviceCheck.existingSu() != null;
+    }
+
+    /** Dumps every input that feeds the "already rooted" decision, so a wrong
+     *  status card can be traced to the exact condition. Logged only when the
+     *  snapshot changes, to keep logcat readable. */
+    private String rootEvidenceSeen;
+
+    private void logRootEvidence(String from) {
+        File dev = new File("/dev/df");
+        boolean devExists = dev.exists();
+        boolean daemonMarker = new File("/dev/dfm6").exists();
+        String uid = "n/a";
         try {
-            String reason = DeviceCheck.blockReason();
-            if (reason != null) {
-                log("已中止：" + reason);
-                return;
+            java.io.BufferedReader r = new java.io.BufferedReader(
+                    new java.io.FileReader("/proc/self/status"));
+            for (String l; (l = r.readLine()) != null; ) {
+                if (l.startsWith("Uid:")) {
+                    uid = l.substring(4).trim();
+                    break;
+                }
             }
-            log(DeviceCheck.report());
-            if (!DeviceCheck.preflight("手动运行")) {
-                log("\n自检未通过：依赖路径缺失 —— 没有修改任何文件，已中止。");
-                return;
+            r.close();
+        } catch (IOException ignored) {
+        }
+        String evidence = "from=" + from
+                + " /dev/df.exists=" + devExists
+                + " /dev/dfm6.exists=" + daemonMarker
+                + " readable=" + dev.canRead()
+                + " writable=" + dev.canWrite()
+                + " uid=" + uid
+                + " suManagerPkg=" + suManagerPkg
+                + " failedRun=" + failedRun
+                + " mLastFailed=" + mLastFailed
+                + " canRun=" + canRun();
+        if (evidence.equals(rootEvidenceSeen)) return;
+        rootEvidenceSeen = evidence;
+        Log.i(TAG, "root-evidence " + evidence);
+    }
+
+    /** Run needs a manager selected and no existing root. A failed run is not a
+     *  lock: the user can retry right away. */
+    private boolean canRun() {
+        // ksud is bundled in assets; DeviceCheck gates unsafe re-runs.
+        return DeviceCheck.blockReason() == null;
+    }
+
+    /** Single place that decides the Run pill's look and enabled state. */
+    private void updateRunButton() {
+        logRootEvidence("updateRunButton");
+        updateSoftRebootButton();
+        if (running) return;
+        if (isRooted()) {
+            setRootedState(true);
+            return;
+        }
+        boolean ok = canRun();
+        String block = DeviceCheck.blockReason();
+        View run = home(R.id.btnRun);
+        if (run != null) {
+            run.setEnabled(ok);
+            run.setAlpha(ok ? 1f : 0.4f);
+        }
+
+        // 状态卡：可运行绿色；被 DeviceCheck 拦截时显示拦截原因
+        if (ok) {
+            setStatusCard(R.drawable.ic_play, R.string.status_ready,
+                    getColor(R.color.status_active_container),
+                    getColor(R.color.status_active_ink));
+        } else {
+            setStatusCard(R.drawable.ic_error, R.string.status_blocked,
+                    resolveThemeColor(R.attr.accentContainer),
+                    resolveThemeColor(R.attr.accentInk));
+            TextView label = home(R.id.statusLabel);
+            if (label != null && block != null) label.setText(block);
+        }
+    }
+
+    /** Soft reboot is only offered while root is up and nothing else runs. */
+    private void updateSoftRebootButton() {
+        View btn = home(R.id.btnSoftReboot);
+        if (btn == null) return;
+        btn.setVisibility(isRooted() && !running ? View.VISIBLE : View.GONE);
+    }
+
+    /** First tap opens the menu; the menu item is the second tap and reboots. */
+    private void showSoftRebootMenu(View anchor) {
+        if (running || !isRooted()) return;
+        androidx.appcompat.widget.PopupMenu menu =
+                new androidx.appcompat.widget.PopupMenu(this, anchor);
+        menu.getMenu().add(0, 1, 0, R.string.soft_reboot);
+        menu.setOnMenuItemClickListener(item -> {
+            softReboot();
+            return true;
+        });
+        menu.show();
+    }
+
+    /** `ksud soft-reboot` needs the ksu domain, so it is handed to the SU
+     *  manager the user picked instead of being exec'd by the app uid. */
+    private void softReboot() {
+        mExec.execute(() -> {
+            String failure = null;
+            try {
+                Process p = new ProcessBuilder("su", "-c", "/data/adb/ksud soft-reboot")
+                        .redirectErrorStream(true).start();
+                java.io.BufferedReader r = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(p.getInputStream()));
+                StringBuilder out = new StringBuilder();
+                for (String l; (l = r.readLine()) != null; ) out.append(l).append('\n');
+                r.close();
+                if (p.waitFor() != 0) {
+                    failure = out.toString().trim();
+                    if (failure.isEmpty()) failure = "exit " + p.exitValue();
+                }
+            } catch (Exception e) {
+                failure = e.getMessage() != null ? e.getMessage() : e.toString();
             }
+            final String error = failure;
+            mMain.post(() -> {
+                if (error == null) {
+                    android.widget.Toast.makeText(this, R.string.soft_reboot_requested,
+                            android.widget.Toast.LENGTH_SHORT).show();
+                } else {
+                    android.widget.Toast.makeText(this,
+                            getString(R.string.soft_reboot_failed, error),
+                            android.widget.Toast.LENGTH_LONG).show();
+                }
+            });
+        });
+    }
 
-            IpSecManager ipsec = (IpSecManager) getSystemService(IPSEC_SERVICE);
+    /** 状态卡的图标/文案/配色随状态变化。 */
+    private void setStatusCard(int iconRes, int labelRes, int bgColor, int inkColor) {
+        com.google.android.material.card.MaterialCardView card = home(R.id.statusCard);
+        android.widget.ImageView icon = home(R.id.statusIcon);
+        TextView caption = home(R.id.statusCaption);
+        TextView label = home(R.id.statusLabel);
+        if (card != null) card.setCardBackgroundColor(bgColor);
+        if (icon != null) {
+            icon.setImageResource(iconRes);
+            icon.setImageTintList(android.content.res.ColorStateList.valueOf(inkColor));
+        }
+        if (caption != null) caption.setTextColor(inkColor);
+        if (label != null) {
+            label.setText(labelRes);
+            label.setTextColor(inkColor);
+        }
+    }
 
-            IpSecManager.UdpEncapsulationSocket encapSock = ipsec.openUdpEncapsulationSocket();
-            int encapPort = encapSock.getPort();
-            log("IPSec 封装端口: " + encapPort);
+    /** Failure presentation: the status card turns red. The run button
+     *  stays enabled - retrying is allowed. */
+    private void setFailedState() {
+        failedRun = true;
+        setStatusCard(R.drawable.ic_error, R.string.failure,
+                getColor(R.color.status_error_container),
+                getColor(R.color.status_error_ink));
 
-            InetAddress loopback = InetAddress.getByName("127.0.0.1");
-            IpSecManager.SecurityParameterIndex spiObj =
-                    ipsec.allocateSecurityParameterIndex(loopback);
-            int spiVal = spiObj.getSpi();
-            log("SPI: 0x" + Integer.toHexString(spiVal));
+        View run = home(R.id.btnRun);
+        if (run != null) {
+            boolean ok = canRun();
+            run.setEnabled(ok);
+            run.setAlpha(ok ? 1f : 0.4f);
+        }
+    }
 
-            SecureRandom rng = new SecureRandom();
-            byte[] aesKey  = new byte[32]; rng.nextBytes(aesKey);
-            byte[] hmacKey = new byte[32]; rng.nextBytes(hmacKey);
+    private void setRootedState(boolean rooted) {
+        logRootEvidence("setRootedState(" + rooted + ")");
+        updateSoftRebootButton();
+        // Not rooted does not mean runnable: the manager still has to be picked.
+        boolean ok = !rooted && canRun();
+        boolean active = rooted || ok;
+        // A previous failed run must not mask a successful one.
+        if (failedRun && !rooted) {
+            setFailedState();
+            return;
+        }
+        View run = home(R.id.btnRun);
+        if (run != null) {
+            // Rooted: the button stays clickable but only opens the saved log.
+            boolean enabled = rooted || ok;
+            run.setEnabled(enabled);
+            run.setAlpha(enabled ? 1f : 0.4f);
+        }
 
-            IpSecAlgorithm enc  = new IpSecAlgorithm(IpSecAlgorithm.CRYPT_AES_CBC, aesKey);
-            IpSecAlgorithm auth = new IpSecAlgorithm(IpSecAlgorithm.AUTH_HMAC_SHA256, hmacKey, 128);
+        setStatusCard(rooted ? R.drawable.ic_check
+                        : ok ? R.drawable.ic_play : R.drawable.ic_error,
+                rooted ? R.string.rooted
+                        : ok ? R.string.status_ready : R.string.status_blocked,
+                active ? getColor(R.color.status_active_container)
+                        : resolveThemeColor(R.attr.accentContainer),
+                active ? getColor(R.color.status_active_ink)
+                        : resolveThemeColor(R.attr.accentInk));
+    }
 
-            DatagramSocket senderSock = new DatagramSocket();
-            int senderPort = senderSock.getLocalPort();
-            senderSock.close();
+    /** Known SU-manager packages for the "open manager" shortcut. */
+    private static final String[] KNOWN_MANAGERS = {
+            "com.sukisu.ultra",
+            "com.resukisu.resukisu",
+            "me.weishu.kernelsu",
+            "com.rifsxd.ksunext",
+            "com.rifsxd.kernelsu",
+            "me.bmax.apatch",
+            "me.garfieldhan.apatch.next",
+            "io.github.huskydg.magisk",
+            "com.topjohnwu.magisk",
+            "io.github.vvb2060.magisk",
+            "com.dergoogler.mmrl",
+    };
 
-            IpSecTransform transform = new IpSecTransform.Builder(this)
-                    .setEncryption(enc)
-                    .setAuthentication(auth)
-                    .setIpv4Encapsulation(encapSock, senderPort)
-                    .buildTransportModeTransform(loopback, spiObj);
+    /** Opens a known SU manager app if installed. The exploit itself uses the
+     *  bundled ksud, so this is only a convenience shortcut. */
+    private void openKsu() {
+        if (suManagerPkg == null || "df.root.bundled".equals(suManagerPkg)) {
+            // Bundled ksud has no manager UI of its own; try well-known packages.
+            for (String pkg : KNOWN_MANAGERS) {
+                Intent launch = getPackageManager().getLaunchIntentForPackage(pkg);
+                if (launch != null) {
+                    startActivity(launch);
+                    return;
+                }
+            }
+            return;
+        }
+        Intent launch = getPackageManager().getLaunchIntentForPackage(suManagerPkg);
+        if (launch == null) {
+            Log.i(TAG, "no launch intent for " + suManagerPkg);
+            return;
+        }
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(launch);
+    }
 
-            stageAsset(this, "ksud", true, getFilesDir());
-            log("ksud 已暂存到: " + new File(getFilesDir(), "ksud").getAbsolutePath());
-            log("开始执行漏洞利用……");
-
-            int icvLen = 128 / 8;
-            String ksudPath = new File(getFilesDir(), "ksud").getAbsolutePath();
-            int rc = nativeRunAll(this, encapPort, spiVal, aesKey, hmacKey, icvLen, senderPort, ksudPath, true);
-
-            transform.close();
-            spiObj.close();
-            encapSock.close();
-
+    private void openUrl(String url) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
         } catch (Exception e) {
-            Log.e(TAG, "exploit exception", e);
-            log("\n发生异常: " + e);
-        } finally {
-            mMain.post(this::refreshRunState);
+            Log.i(TAG, "no browser for " + url);
         }
     }
 
-    static void stageAsset(Context ctx, String name, boolean executable, File dir) throws IOException {
-        File dest = new File(dir, name);
-        File tmp = new File(dest.getPath() + ".tmp");
-        try (InputStream in = ctx.getAssets().open(name);
-             OutputStream out = new FileOutputStream(tmp)) {
-            byte[] buf = new byte[8192];
-            for (int n; (n = in.read(buf)) > 0; ) out.write(buf, 0, n);
+    private void applyThemeAndLanguage() {
+        SharedPreferences prefs = createDeviceProtectedStorageContext()
+                .getSharedPreferences("dfroot", MODE_PRIVATE);
+        androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(
+                prefs.getBoolean("dark_mode", false)
+                        ? androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
+                        : androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO);
+    }
+
+    /** Overlays the chosen accent tone on the base theme. Must run after
+     *  super.onCreate and before setContentView so every ?attr/accent*
+     *  reference in the inflated layouts and drawables resolves to it. */
+    private void applyAccentTone() {
+        String tone = createDeviceProtectedStorageContext()
+                .getSharedPreferences("dfroot", MODE_PRIVATE)
+                .getString("accent_tone", "teal");
+        getTheme().applyStyle(toneOverlay(tone), true);
+    }
+
+    private static int toneOverlay(String tone) {
+        switch (tone) {
+            case "blue": return R.style.ThemeOverlay_DirtyFrag_Tone_Blue;
+            case "purple": return R.style.ThemeOverlay_DirtyFrag_Tone_Purple;
+            case "amber": return R.style.ThemeOverlay_DirtyFrag_Tone_Amber;
+            default: return R.style.ThemeOverlay_DirtyFrag_Tone_Teal;
         }
-        if (!tmp.renameTo(dest)) { tmp.delete(); throw new IOException("rename failed: " + dest); }
-        if (executable) dest.setExecutable(true, false);
     }
 
-    private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
+    /** Opt-in Fang Yuan face; default theme already uses system sans-serif. */
+    private void applyUiFont() {
+        String font = createDeviceProtectedStorageContext()
+                .getSharedPreferences("dfroot", MODE_PRIVATE)
+                .getString("ui_font", "system");
+        if ("fangyuan".equals(font)) {
+            getTheme().applyStyle(R.style.ThemeOverlay_DirtyFrag_Font_FangYuan, true);
+        }
     }
 
-    private void log(String msg) {
-        Log.i(TAG, msg);
-        report(msg + "\n");
+    private static int toneButton(String tone) {
+        switch (tone) {
+            case "blue": return R.id.toneBlue;
+            case "purple": return R.id.tonePurple;
+            case "amber": return R.id.toneAmber;
+            default: return R.id.toneTeal;
+        }
+    }
+
+    private static String toneValue(int buttonId) {
+        if (buttonId == R.id.toneBlue) return "blue";
+        if (buttonId == R.id.tonePurple) return "purple";
+        if (buttonId == R.id.toneAmber) return "amber";
+        return "teal";
+    }
+
+    private int resolveThemeColor(int attr) {
+        android.util.TypedValue value = new android.util.TypedValue();
+        getTheme().resolveAttribute(attr, value, true);
+        return value.data;
+    }
+
+    private void setupAppearanceSelectors() {
+        SharedPreferences prefs = mDeCtx.getSharedPreferences("dfroot", MODE_PRIVATE);
+        com.google.android.material.button.MaterialButtonToggleGroup theme =
+                settings(R.id.themeSelector);
+        com.google.android.material.button.MaterialButtonToggleGroup language =
+                settings(R.id.languageSelector);
+        com.google.android.material.button.MaterialButtonToggleGroup tone =
+                settings(R.id.toneSelector);
+        if (theme == null || language == null) return;
+        theme.check(prefs.getBoolean("dark_mode", false)
+                ? R.id.themeDark : R.id.themeLight);
+        String langPref = prefs.getString("language", "zh-CN");
+        if ("en".equals(langPref)) language.check(R.id.languageEn);
+        else if ("zh-TW".equals(langPref) || "zh_TW".equals(langPref) || "zh-Hant".equals(langPref))
+            language.check(R.id.languageZhTw);
+        else language.check(R.id.languageZh);
+        theme.addOnButtonCheckedListener((group, id, checked) -> {
+            if (!checked || running) return;
+            boolean dark = id == R.id.themeDark;
+            if (prefs.getBoolean("dark_mode", false) == dark) return;
+            prefs.edit().putBoolean("dark_mode", dark).apply();
+            applyThemeAndLanguage();
+        });
+        language.addOnButtonCheckedListener((group, id, checked) -> {
+            if (!checked || running) return;
+            String lang = id == R.id.languageEn ? "en"
+                    : (id == R.id.languageZhTw ? "zh-TW" : "zh");
+            if (lang.equals(prefs.getString("language", "zh-CN"))) return;
+            prefs.edit().putString("language", lang).apply();
+            recreate();
+        });
+        if (tone != null) {
+            tone.check(toneButton(prefs.getString("accent_tone", "teal")));
+            tone.addOnButtonCheckedListener((group, id, checked) -> {
+                if (!checked || running) return;
+                String value = toneValue(id);
+                if (value.equals(prefs.getString("accent_tone", "teal"))) return;
+                prefs.edit().putString("accent_tone", value).apply();
+                recreate();
+            });
+        }
+        com.google.android.material.button.MaterialButtonToggleGroup font =
+                settings(R.id.fontSelector);
+        if (font == null) return;
+        font.check("fangyuan".equals(prefs.getString("ui_font", "system"))
+                ? R.id.fontFangYuan : R.id.fontSystem);
+        font.addOnButtonCheckedListener((group, id, checked) -> {
+            if (!checked || running) return;
+            String value = id == R.id.fontFangYuan ? "fangyuan" : "system";
+            if (value.equals(prefs.getString("ui_font", "system"))) return;
+            prefs.edit().putString("ui_font", value).apply();
+            recreate();
+        });
+    }
+
+    private void setAppearanceSelectorsEnabled(boolean enabled) {
+        int[] ids = {R.id.themeSelector, R.id.themeLight, R.id.themeDark,
+                R.id.toneSelector, R.id.toneTeal, R.id.toneBlue,
+                R.id.tonePurple, R.id.toneAmber,
+                R.id.fontSelector, R.id.fontSystem, R.id.fontFangYuan,
+                R.id.languageSelector, R.id.languageZh, R.id.languageZhTw, R.id.languageEn};
+        for (int id : ids) {
+            View v = settings(id);
+            if (v != null) v.setEnabled(enabled);
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (updateChecker != null) updateChecker.cancel();
+        super.onDestroy();
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        outState.putInt("selected_nav", selectedNav);
+        outState.putBoolean("failed_run", failedRun);
+        super.onSaveInstanceState(outState);
     }
 }

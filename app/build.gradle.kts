@@ -11,8 +11,8 @@ android {
         applicationId = "df.root"
         minSdk = 32
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.3.0-s938b"
+        versionCode = 6
+        versionName = "1.4.0-s938b"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -55,6 +55,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 
     externalNativeBuild {
@@ -74,4 +75,6 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
     implementation(libs.androidx.constraintlayout)
+    implementation(libs.androidx.viewpager2)
+    implementation(libs.androidx.fragment)
 }

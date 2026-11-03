@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Transparent at rest so the dialog's own surface shows through; only the
+     press ripple is tinted. Used by the root-manager picker rows. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#1F000000">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="12dp" />
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+</ripple>
