@@ -78,6 +78,7 @@
     <string name="font_system">系統</string>
     <string name="font_fangyuan">方圓體</string>
     <string name="run_exploit">開始執行</string>
+    <string name="view_log">查看日誌</string>
     <string name="get_root">取得 root</string>
     <string name="running">執行中</string>
     <string name="rooted">已取得 root</string>
@@ -104,9 +105,6 @@
     <string name="not_activated">未啟用</string>
     <string name="system_info">系統資訊</string>
     <string name="about">關於</string>
-    <string name="community">使用教學</string>
-    <string name="community_desc">點一下查看</string>
-    <string name="community_url">https://www.yuque.com/ababa-haoqq/ykpku4/opnfcgpodggmdn8w?singleDoc#</string>
     <string name="repo_original">原專案倉庫</string>
     <string name="repo_original_url">https://github.com/mitschud/DirtyFrag.git</string>
     <string name="repo_fork">本專案倉庫</string>

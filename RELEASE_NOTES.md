@@ -13,6 +13,7 @@
 - 漏洞后端不变：`DeviceCheck` + IpSec AES-CBC/HMAC-SHA256 + `assets/ksud`（32687）+ JNI。
 - 兼容修复：`expert_mode` 从旧 BootReceiver 状态迁移；`auto_soft_reboot` 真正控制开机软重启；
   移除外部 SU 管理器扫描与 `QUERY_ALL_PACKAGES`；开机失败 3 次才禁用自动执行。
+- 移除使用教程入口（设置页与公告弹窗）；已 root 时首页运行按钮切换为「查看日志」图标。
 - `versionCode 6` / `versionName 1.4.0-s938b`。
 
 ## 1.3.0 UI（2026-10-25）

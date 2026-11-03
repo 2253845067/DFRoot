@@ -444,14 +444,6 @@ public class MainActivity extends AppCompatActivity {
             if (link != null) link.setOnClickListener(v ->
                     openUrl(getString(R.string.repo_fork_url)));
         }
-        View[] community = {
-                settings(R.id.rowCommunity), settings(R.id.communityLabel),
-                settings(R.id.communityDesc)};
-        for (View link : community) {
-            if (link != null) link.setOnClickListener(v ->
-                    openUrl(getString(R.string.community_url)));
-        }
-
         TextView updateVersion = settings(R.id.updateCheckVersion);
         if (updateVersion != null) {
             updateVersion.setText(getString(R.string.update_current_version,
@@ -629,6 +621,7 @@ public class MainActivity extends AppCompatActivity {
             run.setEnabled(ok);
             run.setAlpha(ok ? 1f : 0.4f);
         }
+        setRunButtonMode(false);
 
         // 状态卡：可运行绿色；被 DeviceCheck 拦截时显示拦截原因
         if (ok) {
@@ -730,6 +723,7 @@ public class MainActivity extends AppCompatActivity {
             run.setEnabled(ok);
             run.setAlpha(ok ? 1f : 0.4f);
         }
+        setRunButtonMode(false);
     }
 
     private void setRootedState(boolean rooted) {
@@ -750,6 +744,7 @@ public class MainActivity extends AppCompatActivity {
             run.setEnabled(enabled);
             run.setAlpha(enabled ? 1f : 0.4f);
         }
+        setRunButtonMode(rooted);
 
         setStatusCard(rooted ? R.drawable.ic_check
                         : ok ? R.drawable.ic_play : R.drawable.ic_error,
@@ -759,6 +754,16 @@ public class MainActivity extends AppCompatActivity {
                         : resolveThemeColor(R.attr.accentContainer),
                 active ? getColor(R.color.status_active_ink)
                         : resolveThemeColor(R.attr.accentInk));
+    }
+
+    /** Rooted: the same button opens the saved log instead of running. */
+    private void setRunButtonMode(boolean rooted) {
+        View run = home(R.id.btnRun);
+        if (!(run instanceof android.widget.ImageButton)) return;
+        android.widget.ImageButton button = (android.widget.ImageButton) run;
+        button.setImageResource(rooted ? R.drawable.ic_logs : R.drawable.ic_play);
+        button.setContentDescription(getString(
+                rooted ? R.string.view_log : R.string.run_exploit));
     }
 
     /** Known SU-manager packages for the "open manager" shortcut. */
