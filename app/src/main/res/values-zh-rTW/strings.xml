@@ -12,7 +12,7 @@
     <string name="run_title">執行</string>
     <string name="prerequisites">執行前置條件</string>
     <string name="current_status">目前狀態</string>
-    <string name="prerequisite_hint">執行前需要選擇 SU 管理器。開始前請確認裝置與管理器狀態。</string>
+    <string name="prerequisite_hint">DFRoot 內建 Samsung KernelSU ksud（32687），不需要外部 SU 管理器。</string>
     <string name="su_manager">SU 管理器</string>
     <string name="select_manager">選擇 SU 管理器</string>
     <string name="su_required">尚未選擇 · 必需</string>
@@ -112,5 +112,6 @@
     <string name="repo_fork">本專案倉庫</string>
     <string name="repo_fork_url">https://github.com/2253845067/DFRoot.git</string>
     <string name="su_bundled">內建 Samsung ksud</string>
+    <string name="su_bundled_desc">DFRoot 內建 Samsung KernelSU ksud（32687），不需要外部 SU 管理器。</string>
     <string name="status_blocked">目前無法執行</string>
 </resources>

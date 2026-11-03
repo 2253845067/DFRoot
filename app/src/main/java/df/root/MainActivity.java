@@ -56,8 +56,6 @@ public class MainActivity extends AppCompatActivity {
     private Context mDeCtx;
     /** Package name of the SU manager whose libksud.so gets staged, or null. */
     private String suManagerPkg;
-    private CharSequence suManagerLabel;
-    private android.graphics.drawable.Drawable suManagerIcon;
     /** A failed run locks the Run button until reboot (page-cache patch). */
     private boolean failedRun;
     private UpdateChecker updateChecker;
@@ -126,7 +124,7 @@ public class MainActivity extends AppCompatActivity {
     protected void attachBaseContext(Context newBase) {
         SharedPreferences prefs = newBase.createDeviceProtectedStorageContext()
                 .getSharedPreferences("dfroot", MODE_PRIVATE);
-        java.util.Locale locale = localeFor(prefs.getString("language", "zh-TW"));
+        java.util.Locale locale = localeFor(prefs.getString("language", "zh-CN"));
         java.util.Locale.setDefault(locale);
         android.content.res.Configuration config = new android.content.res.Configuration(
                 newBase.getResources().getConfiguration());
@@ -208,9 +206,7 @@ public class MainActivity extends AppCompatActivity {
                 == PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
 
         // Expert mode gates the boot options in settings.
-        expertMode = createDeviceProtectedStorageContext()
-                .getSharedPreferences("dfroot", MODE_PRIVATE)
-                .getBoolean("expert_mode", false);
+        expertMode = BootReceiver.isExpertMode(this);
 
         selectedNav = savedInstanceState == null ? R.id.nav_home
                 : savedInstanceState.getInt("selected_nav", R.id.nav_home);
@@ -420,7 +416,7 @@ public class MainActivity extends AppCompatActivity {
 
         boolean autoSoftReboot = createDeviceProtectedStorageContext()
                 .getSharedPreferences("dfroot", MODE_PRIVATE)
-                .getBoolean("auto_soft_reboot", false);
+                .getBoolean("auto_soft_reboot", true);
         com.google.android.material.materialswitch.MaterialSwitch soft =
                 settings(R.id.switchAutoSoftReboot);
         if (soft != null) {
@@ -531,246 +527,37 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // ---- SU manager picker --------------------------------------------------
+    // ---- Bundled ksud card ------------------------------------------------
 
-    /** One candidate: an app that actually ships libksud.so. */
-    private static final class SuManagerEntry {
-        final String packageName;
-        final CharSequence label;
-        final android.graphics.drawable.Drawable icon;
-
-        SuManagerEntry(String pkg, CharSequence label, android.graphics.drawable.Drawable icon) {
-            this.packageName = pkg;
-            this.label = label;
-            this.icon = icon;
-        }
-    }
-
-    /** Every installed app carrying libksud.so in its native lib dir - exactly
-     *  the set ExploitRunner.stageAssets() can use, so anything listed here is
-     *  guaranteed to pass the runtime check too. */
-    private List<SuManagerEntry> scanSuManagers() {
-        List<SuManagerEntry> out = new ArrayList<>();
-        PackageManager pm = getPackageManager();
-        for (ApplicationInfo ai : pm.getInstalledApplications(0)) {
-            if (ai.packageName.equals(getPackageName())) continue;
-            if (ai.nativeLibraryDir == null) continue;
-            if (!ExploitRunner.hasKsud(ai)) continue;
-            out.add(new SuManagerEntry(ai.packageName, pm.getApplicationLabel(ai),
-                    pm.getApplicationIcon(ai)));
-        }
-        out.sort((a, b) -> a.label.toString().compareToIgnoreCase(b.label.toString()));
-        return out;
-    }
-
-    /** Well-known SU manager packages. Only used to preselect a default, never
-     *  to filter the picker list. */
-    private static final String[] KNOWN_MANAGERS = {
-            "com.sukisu.ultra",
-            "com.resukisu.resukisu",
-            "me.weishu.kernelsu",
-            "com.rifsxd.ksunext",
-            "com.rifsxd.kernelsu",
-            "me.bmax.apatch",
-            "me.garfieldhan.apatch.next",
-            "io.github.huskydg.magisk",
-            "com.topjohnwu.magisk",
-            "io.github.vvb2060.magisk",
-            "com.dergoogler.mmrl",
-    };
-
-    /** Picks a default when nothing was saved yet. The ksud scan is the first
-     *  source, but it is not authoritative - some managers ship the library
-     *  under a different name/dir, so the known package list is tried next.
-     *  A single candidate from either source is the default. */
-    private SuManagerEntry findDefaultSuManager() {
-        List<SuManagerEntry> found = scanSuManagers();
-        if (found.isEmpty()) {
-            PackageManager pm = getPackageManager();
-            for (String pkg : KNOWN_MANAGERS) {
-                try {
-                    ApplicationInfo ai = pm.getApplicationInfo(pkg, 0);
-                    found.add(new SuManagerEntry(pkg, pm.getApplicationLabel(ai),
-                            pm.getApplicationIcon(ai)));
-                } catch (PackageManager.NameNotFoundException ignored) {
-                    // not installed
-                }
-            }
-        }
-        if (found.isEmpty()) return null;
-        // Several managers installed: rank them. One manager: take it.
-        found.sort((a, b) -> {
-            int ra = managerRank(a.packageName);
-            int rb = managerRank(b.packageName);
-            if (ra != rb) return ra - rb;
-            return a.label.toString().compareToIgnoreCase(b.label.toString());
-        });
-        return found.get(0);
-    }
-
-    /** Index in KNOWN_MANAGERS, or a large value for anything unknown. */
-    private static int managerRank(String pkg) {
-        for (int i = 0; i < KNOWN_MANAGERS.length; i++) {
-            if (KNOWN_MANAGERS[i].equals(pkg)) return i;
-        }
-        return KNOWN_MANAGERS.length;
-    }
-
-    /** Restores the saved selection, or picks a default when none was saved.
-     *  Safe to call before the home view exists: the fields are the source of
-     *  truth and the card is rendered from them by onHomeViewReady(). */
+    /** DFRoot ships assets/ksud (Samsung KernelSU 32687). The external SU
+     *  manager picker from DirtyFragX is intentionally not used: the exploit
+     *  stages the bundled asset, so a selected external manager would have no
+     *  effect and only require QUERY_ALL_PACKAGES. */
     private void loadSuManagerPref() {
-        SharedPreferences sp = mDeCtx.getSharedPreferences("dfroot", MODE_PRIVATE);
-        String saved = sp.getString("su_manager", null);
-        suManagerPkg = null;
-        suManagerLabel = null;
-        suManagerIcon = null;
-        if (saved != null && !"df.root.bundled".equals(saved)) {
-            PackageManager pm = getPackageManager();
-            try {
-                ApplicationInfo ai = pm.getApplicationInfo(saved, 0);
-                suManagerPkg = saved;
-                suManagerLabel = pm.getApplicationLabel(ai);
-                suManagerIcon = pm.getApplicationIcon(ai);
-            } catch (PackageManager.NameNotFoundException e) {
-                sp.edit().remove("su_manager").apply();
-            }
-        }
-        // DFRoot s938b ships assets/ksud (Samsung KernelSU). Prefer that label
-        // when nothing external is selected; Run no longer requires a manager.
-        if (suManagerPkg == null) {
-            suManagerPkg = "df.root.bundled";
-            suManagerLabel = getString(R.string.su_bundled);
-            suManagerIcon = null;
-            sp.edit().putString("su_manager", suManagerPkg).apply();
-        }
+        suManagerPkg = "df.root.bundled";
+        mDeCtx.getSharedPreferences("dfroot", MODE_PRIVATE)
+                .edit().putString("su_manager", suManagerPkg).apply();
         renderSuManagerCard();
     }
 
-    /** Writes the selection into the home card (no-op until that view exists). */
+    /** Writes the built-in ksud label into the home card. */
     private void renderSuManagerCard() {
         TextView sub = home(R.id.suManagerSubtitle);
         if (sub != null) {
-            if (suManagerPkg == null) {
-                sub.setText(R.string.su_required);
-                sub.setTextColor(getColor(R.color.error));
-            } else if ("df.root.bundled".equals(suManagerPkg)) {
-                sub.setText(R.string.su_bundled);
-                sub.setTextColor(getColor(R.color.text_secondary));
-            } else {
-                sub.setText(suManagerLabel + "  (" + suManagerPkg + ")");
-                sub.setTextColor(getColor(R.color.text_secondary));
-            }
+            sub.setText(R.string.su_bundled);
+            sub.setTextColor(getColor(R.color.text_secondary));
         }
-        renderSuManagerIcon();
-    }
-
-    /** Puts the chosen manager's launcher icon on the home card. */
-    private void renderSuManagerIcon() {
         android.widget.ImageView icon = home(R.id.imgSuManager);
-        if (icon == null) return;
-        icon.setImageDrawable(suManagerIcon);
-        icon.setVisibility(suManagerIcon == null ? View.GONE : View.VISIBLE);
+        if (icon != null) icon.setVisibility(View.GONE);
     }
 
-    /** Root-manager picker: stock single-choice dialog with each app's own icon. */
+    /** The card is informational; tapping explains that the ksud is bundled. */
     private void showSuManagerPopup() {
-        List<SuManagerEntry> apps = scanSuManagers();
-        if (apps.isEmpty()) {
-            new androidx.appcompat.app.AlertDialog.Builder(this)
-                    .setMessage(R.string.su_none)
-                    .setPositiveButton(android.R.string.ok, null)
-                    .show();
-            return;
-        }
-
-        float md = getResources().getDisplayMetrics().density;
-        int pad = (int) (20 * md);
-        int iconSize = (int) (32 * md);
-        int gap = (int) (16 * md);
-
-        android.widget.LinearLayout list = new android.widget.LinearLayout(this);
-        list.setOrientation(android.widget.LinearLayout.VERTICAL);
-        list.setPadding(0, (int) (8 * md), 0, (int) (8 * md));
-
-        final androidx.appcompat.app.AlertDialog[] ref = {null};
-        int checkedIndex = -1;
-        for (int i = 0; i < apps.size(); i++) {
-            if (apps.get(i).packageName.equals(suManagerPkg)) checkedIndex = i;
-        }
-
-        for (int i = 0; i < apps.size(); i++) {
-            SuManagerEntry e = apps.get(i);
-            android.widget.LinearLayout row = new android.widget.LinearLayout(this);
-            row.setOrientation(android.widget.LinearLayout.HORIZONTAL);
-            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-            row.setBackgroundResource(R.drawable.menu_row_highlight);
-            row.setPadding(pad, 0, pad, 0);
-            row.setMinimumHeight((int) (56 * md));
-
-            android.widget.ImageView ic = new android.widget.ImageView(this);
-            ic.setImageDrawable(e.icon);
-            ic.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-            row.addView(ic, new android.widget.LinearLayout.LayoutParams(iconSize, iconSize));
-
-            android.widget.LinearLayout text = new android.widget.LinearLayout(this);
-            text.setOrientation(android.widget.LinearLayout.VERTICAL);
-            android.widget.LinearLayout.LayoutParams textLp =
-                    new android.widget.LinearLayout.LayoutParams(0,
-                            android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            textLp.setMargins(gap, 0, 0, 0);
-            row.addView(text, textLp);
-
-            TextView name = new TextView(this);
-            name.setText(e.label);
-            name.setTextColor(getColor(R.color.text_primary));
-            name.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15);
-            text.addView(name);
-
-            TextView pkg = new TextView(this);
-            pkg.setText(e.packageName);
-            pkg.setTextColor(getColor(R.color.text_secondary));
-            pkg.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12);
-            text.addView(pkg);
-
-            android.widget.RadioButton mark = new android.widget.RadioButton(this);
-            mark.setChecked(i == checkedIndex);
-            mark.setClickable(false);
-            mark.setFocusable(false);
-            mark.setButtonTintList(android.content.res.ColorStateList.valueOf(
-                    resolveThemeColor(R.attr.accentInk)));
-            row.addView(mark);
-
-            final int index = i;
-            row.setOnClickListener(v -> {
-                v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
-                selectSuManager(apps.get(index));
-                if (ref[0] != null) ref[0].dismiss();
-            });
-            list.addView(row, new android.widget.LinearLayout.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
-        }
-
-        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
-        scroll.addView(list);
-
-        ref[0] = new androidx.appcompat.app.AlertDialog.Builder(this)
+        new androidx.appcompat.app.AlertDialog.Builder(this)
                 .setTitle(R.string.su_manager)
-                .setView(scroll)
-                .setNegativeButton(android.R.string.cancel, null)
+                .setMessage(R.string.su_bundled_desc)
+                .setPositiveButton(android.R.string.ok, null)
                 .show();
-    }
-
-    /** Writes the DE pref that bootstrap.c reads as su_manager, then unlocks Run. */
-    private void selectSuManager(SuManagerEntry e) {
-        mDeCtx.getSharedPreferences("dfroot", MODE_PRIVATE)
-                .edit().putString("su_manager", e.packageName).apply();
-        suManagerPkg = e.packageName;
-        suManagerLabel = e.label;
-        suManagerIcon = e.icon;
-        renderSuManagerCard();
-        updateRunButton();
     }
 
     /** /dev/df is created by the shellcode with mode 0000, so the app uid can
@@ -974,8 +761,23 @@ public class MainActivity extends AppCompatActivity {
                         : resolveThemeColor(R.attr.accentInk));
     }
 
-    /** Opens the SU manager that is actually selected - pre-3.2 this walked a
-     *  hardcoded package list that no longer matches reality. */
+    /** Known SU-manager packages for the "open manager" shortcut. */
+    private static final String[] KNOWN_MANAGERS = {
+            "com.sukisu.ultra",
+            "com.resukisu.resukisu",
+            "me.weishu.kernelsu",
+            "com.rifsxd.ksunext",
+            "com.rifsxd.kernelsu",
+            "me.bmax.apatch",
+            "me.garfieldhan.apatch.next",
+            "io.github.huskydg.magisk",
+            "com.topjohnwu.magisk",
+            "io.github.vvb2060.magisk",
+            "com.dergoogler.mmrl",
+    };
+
+    /** Opens a known SU manager app if installed. The exploit itself uses the
+     *  bundled ksud, so this is only a convenience shortcut. */
     private void openKsu() {
         if (suManagerPkg == null || "df.root.bundled".equals(suManagerPkg)) {
             // Bundled ksud has no manager UI of its own; try well-known packages.
@@ -1076,7 +878,7 @@ public class MainActivity extends AppCompatActivity {
         if (theme == null || language == null) return;
         theme.check(prefs.getBoolean("dark_mode", false)
                 ? R.id.themeDark : R.id.themeLight);
-        String langPref = prefs.getString("language", "zh-TW");
+        String langPref = prefs.getString("language", "zh-CN");
         if ("en".equals(langPref)) language.check(R.id.languageEn);
         else if ("zh-TW".equals(langPref) || "zh_TW".equals(langPref) || "zh-Hant".equals(langPref))
             language.check(R.id.languageZhTw);
@@ -1092,7 +894,7 @@ public class MainActivity extends AppCompatActivity {
             if (!checked || running) return;
             String lang = id == R.id.languageEn ? "en"
                     : (id == R.id.languageZhTw ? "zh-TW" : "zh");
-            if (lang.equals(prefs.getString("language", "zh-TW"))) return;
+            if (lang.equals(prefs.getString("language", "zh-CN"))) return;
             prefs.edit().putString("language", lang).apply();
             recreate();
         });

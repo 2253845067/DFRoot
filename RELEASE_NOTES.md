@@ -1,4 +1,4 @@
-# DFRoot 1.3.0-s938b（SM-S938B / Galaxy S25 Ultra）
+# DFRoot 1.4.0-s938b（SM-S938B / Galaxy S25 Ultra）
 
 基于 [diabl0w/DFRoot](https://github.com/diabl0w/DFRoot) 的 fork，适配
 **三星 Galaxy S25 Ultra（SM-S938B / pa3q）**，界面与运行输出中文化。
@@ -6,7 +6,16 @@
 利用 DirtyFrag（CVE-2026-43284），在 bootloader 锁定的三星机型上每次开机自动
 重新加载 KernelSU —— 不用再手动跑一遍一键 root 工具。
 
-## 本次更新（1.3.0，2026-10-25）
+## 本次更新（1.4.0，2026-11-03）
+
+- 移植 DirtyFragX UI 壳（卡片首页 / 设置 / 运行日志 / 主题 / 语言 / 更新检查），
+  UI 来自 dugongzi/DirtyFragX（GPL-3.0）；仓库整体采用 GPL-3.0，见 `LICENSE`。
+- 漏洞后端不变：`DeviceCheck` + IpSec AES-CBC/HMAC-SHA256 + `assets/ksud`（32687）+ JNI。
+- 兼容修复：`expert_mode` 从旧 BootReceiver 状态迁移；`auto_soft_reboot` 真正控制开机软重启；
+  移除外部 SU 管理器扫描与 `QUERY_ALL_PACKAGES`；开机失败 3 次才禁用自动执行。
+- `versionCode 6` / `versionName 1.4.0-s938b`。
+
+## 1.3.0 UI（2026-10-25）
 
 - UI 按 Samsung KernelSU 管理器的 Material 3 风格重构：Large 标题、
   状态 hero 卡（就绪 / 已阻止 / 运行中）、设备信息卡、深色日志控制台、
@@ -49,7 +58,7 @@
    <https://github.com/diabl0w/KernelSU/releases/tag/samsung-v2.2>
 2. 安装 DFRoot：
    ```sh
-   adb install -r DFRoot-1.3.0-s938b.apk
+   adb install -r DFRoot-1.4.0-s938b.apk
    ```
 3. 重启，确认管理器显示「未安装」（未 root 状态）。
 4. 打开 DFRoot，点「一键获取 Root」，等待输出「成功：ksud 已启动」。

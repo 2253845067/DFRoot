@@ -11,8 +11,8 @@ android {
         applicationId = "df.root"
         minSdk = 32
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.3.0-s938b"
+        versionCode = 6
+        versionName = "1.4.0-s938b"
 
         ndk {
             abiFilters += listOf("arm64-v8a")

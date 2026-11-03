@@ -3,7 +3,7 @@
 > 这是 [diabl0w/DFRoot](https://github.com/diabl0w/DFRoot) 的 fork，专门适配
 > **三星 Galaxy S25 Ultra（SM-S938B / pa3q）**，界面与运行输出已全部中文化。
 > 漏洞利用原理与绝大部分代码来自上游及下列作者，本 fork 只做了机型适配、启动自检、
-> 中文化、1.2.0 的 KernelSU 32687 升级，以及 1.3.0 的 UI 重构。
+> 中文化、1.2.0 的 KernelSU 32687 升级，以及 1.4.0 的 DirtyFragX UI 移植。
 
 一句话：**开机自动获取 root**。利用 DirtyFrag 漏洞（CVE-2026-43284），
 在 bootloader 锁定的三星机型上，每次开机自动把 KernelSU 重新加载起来 ——
@@ -11,13 +11,19 @@
 
 ---
 
-## UI port note (branch `ui/dirtyfragx-port`)
+## UI port note (1.4.0)
 
-本分支把 [dugongzi/DirtyFragX](https://github.com/dugongzi/DirtyFragX) 的 UI 壳（卡片首页、设置页、运行日志页、主题/语言/更新检查）移植到 DFRoot **s938b**。
+1.4.0 把 [dugongzi/DirtyFragX](https://github.com/dugongzi/DirtyFragX) 的 UI 壳（卡片首页、设置页、运行日志页、主题/语言/更新检查）移植到 DFRoot **s938b**。
 
 - **UI**：来自 DirtyFragX（GPL-3.0），署名 dugongzi / mitschud/DirtyFrag / diabl0w/DFRoot
 - **后端**：仍是本仓库 s938b 已验证链路 —— `DeviceCheck` + IpSec AES-CBC/HMAC-SHA256 + `assets/ksud` + JNI `libexp` / `nativeRunAll`，**不**使用 DirtyFragX 的 `libdfroot.so` 外置 exec / 外部 `libksud.so` 路径
 - 漏洞：CVE-2026-43284（DirtyFrag）
+
+## License
+
+本仓库以 **GNU General Public License v3.0** 分发，见 [LICENSE](LICENSE)。
+UI 壳来自 [dugongzi/DirtyFragX](https://github.com/dugongzi/DirtyFragX)（GPL-3.0）；
+漏洞利用后端仍为 DFRoot s938b 的原始工作，署名见文末致谢。
 
 ---
 

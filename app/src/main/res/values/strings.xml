@@ -12,7 +12,7 @@
     <string name="run_title">Run</string>
     <string name="prerequisites">Prerequisites</string>
     <string name="current_status">Current status</string>
-    <string name="prerequisite_hint">An SU manager is required. Check your device and manager before running.</string>
+    <string name="prerequisite_hint">DFRoot bundles Samsung KernelSU ksud 32687; no external SU manager is required.</string>
     <string name="su_manager">SU manager</string>
     <string name="select_manager">Select SU manager</string>
     <string name="su_required">Not selected · Required</string>
@@ -112,5 +112,6 @@
     <string name="repo_fork">This project</string>
     <string name="repo_fork_url">https://github.com/2253845067/DFRoot.git</string>
     <string name="su_bundled">Built-in Samsung ksud</string>
+    <string name="su_bundled_desc">DFRoot ships the Samsung KernelSU ksud 32687 in its assets; no external SU manager is used.</string>
     <string name="status_blocked">Cannot run right now</string>
 </resources>

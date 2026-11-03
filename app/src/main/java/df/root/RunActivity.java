@@ -60,7 +60,7 @@ public class RunActivity extends AppCompatActivity implements IReporter {
     protected void attachBaseContext(Context newBase) {
         SharedPreferences prefs = newBase.createDeviceProtectedStorageContext()
                 .getSharedPreferences("dfroot", MODE_PRIVATE);
-        java.util.Locale locale = MainActivity.localeFor(prefs.getString("language", "zh-TW"));
+        java.util.Locale locale = MainActivity.localeFor(prefs.getString("language", "zh-CN"));
         java.util.Locale.setDefault(locale);
         android.content.res.Configuration config = new android.content.res.Configuration(
                 newBase.getResources().getConfiguration());
@@ -167,11 +167,9 @@ public class RunActivity extends AppCompatActivity implements IReporter {
     }
 
     private void runExploit() {
-        // bootstrap.c reads soft_reboot straight out of the DE prefs, so mirror
-        // the Autorun card's choice into the key it reads right before launch.
+        // Manual runs always skip soft-reboot; the expert setting only
+        // controls the boot path in BootReceiver.
         SharedPreferences sp = mDeCtx.getSharedPreferences("dfroot", MODE_PRIVATE);
-        boolean autoSoftReboot = sp.getBoolean("auto_soft_reboot", false);
-        sp.edit().putBoolean("soft_reboot", autoSoftReboot).apply();
         lastFailReason = null;
         try {
             int rc = ExploitRunner.run(mDeCtx, this);
